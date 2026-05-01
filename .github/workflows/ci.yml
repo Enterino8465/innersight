@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Lint API
+        working-directory: apps/api
+        run: |
+          uv sync --dev --quiet
+          uv run ruff check innersight_api
+          uv run ruff format --check innersight_api
+
+      - name: Lint worker
+        working-directory: apps/worker
+        run: |
+          uv sync --dev --quiet
+          uv run ruff check innersight_worker
+          uv run ruff format --check innersight_worker
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Typecheck API
+        working-directory: apps/api
+        run: |
+          uv sync --dev --quiet
+          uv run mypy innersight_api
+
+      - name: Typecheck worker
+        working-directory: apps/worker
+        run: |
+          uv sync --dev --quiet
+          uv run mypy innersight_worker
+
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile apps/api
+
+      - name: Build worker image
+        run: docker build -f apps/worker/Dockerfile apps/worker

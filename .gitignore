@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Env
+.env
+
+# Data & ML artifacts (too large for git)
+data/
+ml/experiments/
+ml/models/
+
+# IDE
+.idea/
+.vscode/
+*.DS_Store
+
+# Node
+node_modules/
+
+# Logs
+*.log

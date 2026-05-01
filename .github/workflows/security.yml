@@ -1,0 +1,4 @@
+# Security scanning pipeline.
+# Trivy: scans built Docker images for CVEs (critical = blocking).
+# Semgrep: static analysis on Python + TypeScript source (critical = blocking, warnings allowed).
+# Runs on every push alongside ci.yml.
