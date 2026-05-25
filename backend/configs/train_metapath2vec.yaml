@@ -1,0 +1,32 @@
+node2vec:
+  method: metapath2vec
+  embedding_dim: 64        # per metapath; total input = 18 + 64 * num_valid_metapaths
+  walk_length: 20
+  context_size: 7
+  walks_per_node: 10
+  num_negative_samples: 1
+  epochs: 50
+  batch_size: 128
+  lr: 0.01
+  embeddings_path: checkpoints/metapath2vec_embeddings.pt
+
+model:
+  type: mlp
+  # With partial CERT data only the http metapath is valid → 18+64=82 input dims.
+  # Update layer_sizes[0] to 18 + (64 * num_valid_metapaths) before training.
+  layer_sizes: [82, 128, 64, 1]
+
+training:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  pos_weight: 50.0
+  patience: 5
+
+data:
+  dir: null  # uses INNERSIGHT_DATA_DIR env var if null
+
+output:
+  model_path: checkpoints/m2v/best_model.pt
+  preprocessor_path: checkpoints/m2v/preprocessor.pt
+  log_file: logs/training_m2v.log

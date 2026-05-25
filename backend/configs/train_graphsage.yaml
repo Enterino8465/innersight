@@ -1,0 +1,27 @@
+# Run: python scripts/train.py --config configs/train_graphsage.yaml
+# GPU: python scripts/train.py --config configs/train_graphsage.yaml --device cuda
+# Quick pipeline check: python scripts/train.py --config configs/train_graphsage.yaml --quick
+
+model:
+  type: graphsage
+  hidden_dim: 128
+  num_layers: 2
+  dropout: 0.3
+  head_layers: [128, 64]
+
+training:
+  epochs: 50
+  batch_size: 128
+  lr: 0.001
+  pos_weight: 50.0
+  patience: 5
+  num_neighbors: [10, 5]   # neighbors sampled per hop by NeighborLoader
+
+data:
+  dir: null                         # uses INNERSIGHT_DATA_DIR env var if null
+  graph_cache: checkpoints/graphs/  # directory containing pre-built .pt graph files
+
+output:
+  model_path: checkpoints/model_graphsage.pt
+  embeddings_path: checkpoints/gnn_embeddings.pt
+  log_file: logs/training_graphsage.log

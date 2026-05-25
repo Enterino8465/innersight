@@ -1,0 +1,34 @@
+InnerSight UEBA — Phase 5 Benchmark
+Generated: 2026-05-25T19:44:27.233847
+
+=================================================================
+  Model Comparison — InnerSight UEBA (Phase 5)
+  Evaluation split : test (cached graphs only)
+=================================================================
+  Metric                    MLP (flat)  MLP+Node2Vec     GraphSAGE
+  ---------------------- ------------- ------------- -------------
+  Precision                     (skip)        (skip)        0.0000
+  Recall                        (skip)        (skip)        0.0000
+  F1 Score                      (skip)        (skip)        0.0000
+  AUC-PR                        (skip)        (skip)           N/A
+  True Positives                (skip)        (skip)             0
+  False Positives               (skip)        (skip)          1000
+  False Negatives               (skip)        (skip)             0
+  ---------------------- ------------- ------------- -------------
+  Samples                       (skip)        (skip)          1000
+  Positives in split            (skip)        (skip)             0
+  Score mean                    (skip)        (skip)        1.0000
+  Score max                     (skip)        (skip)        1.0000
+=================================================================
+  Note: evaluation split has 0 positive labels.
+  All F1/Precision/Recall = 0 by definition — not a model failure.
+  Score statistics above show what each model predicts.
+  Train with the full CERT dataset to see real F1/AUC-PR numbers.
+  MLP (flat) skipped: no raw log data — set --data-dir to evaluate MLP models
+  MLP+Node2Vec skipped: no raw log data — set --data-dir to evaluate MLP models
+=================================================================
+
+Model paths evaluated:
+  MLP flat    : checkpoints/flat/best_model.pt  [OK]
+  MLP+N2V     : checkpoints/n2v/best_model.pt  [OK]
+  GraphSAGE   : checkpoints/graphsage/best_model.pt  [OK]
