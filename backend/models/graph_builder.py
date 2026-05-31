@@ -1633,7 +1633,7 @@ def build_temporal_graphs(data: dict | None = None) -> dict:
         ``{'train': HeteroData, 'val': HeteroData, 'test': HeteroData}``
     """
     if data is None:
-        from innersight.backend.b2_data.pipeline import load_raw_logs, load_labels
+        from innersight.backend.data.pipeline import load_raw_logs, load_labels
         _data_dir = os.environ.get('INNERSIGHT_DATA_DIR', 'innersight/data/cert_r4.2')
         logger.info('Loading raw logs from %s', _data_dir)
         _logs   = load_raw_logs(_data_dir)
@@ -1710,7 +1710,7 @@ if __name__ == '__main__':
     # Set model dir early so _graphs_dir() picks it up before any function call.
     os.environ['INNERSIGHT_MODEL_DIR'] = args.model_dir
 
-    from innersight.backend.b2_data.pipeline import load_raw_logs
+    from innersight.backend.data.pipeline import load_raw_logs
 
     print(f'\nLoading raw logs from: {data_dir}')
     logs = load_raw_logs(data_dir)
@@ -1911,7 +1911,7 @@ if __name__ == '__main__':
     print()
 
     # Load answers for label set.
-    from innersight.backend.b2_data.pipeline import load_labels as _load_labels
+    from innersight.backend.data.pipeline import load_labels as _load_labels
     _answers_dir = os.path.join(data_dir, 'answers')
     _labels = _load_labels(_answers_dir)
     print(f'  Insider labels loaded: {len(_labels)}')

@@ -33,8 +33,8 @@ for _p in (_PKG_ROOT, _BACKEND):
 
 logger = logging.getLogger(__name__)
 
-from innersight.backend.b2_data.pipeline import load_data
-from innersight.backend.b2_features.features import build_user_day_features
+from innersight.backend.data.pipeline import load_data
+from innersight.backend.features.features import build_user_day_features
 from innersight.backend.config import (
     ALERTS_FILE, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
     FEATURE_COLS, DEFAULT_TRAINING_CONFIG,

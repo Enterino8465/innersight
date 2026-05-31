@@ -12,9 +12,9 @@ import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
-from innersight.backend.b2_data.pipeline import load_data
-from innersight.backend.b2_features.features import build_user_day_features
-from innersight.backend.b8_scoring.scoring import update_alert_status, _read_alerts_file
+from innersight.backend.data.pipeline import load_data
+from innersight.backend.features.features import build_user_day_features
+from innersight.backend.scoring.scoring import update_alert_status, _read_alerts_file
 from innersight.backend.config import (
     ALERTS_FILE       as _ALERTS_PATH,
     CORRECTIONS_FILE  as _CORRECTIONS_PATH,

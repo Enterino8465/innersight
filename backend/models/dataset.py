@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 # Allow running as __main__ from repo root or backend/
-# _backend adds "from config import ..." and "from b2_features.features import ..."
+# _backend adds "from config import ..." and "from features.features import ..."
 # _pkg_root adds "from innersight.backend.* import ..." used inside pipeline.py
 _backend  = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 _pkg_root = os.path.abspath(os.path.join(_backend, '..', '..'))
@@ -109,7 +109,7 @@ def build_features_tensor(
 ) -> tuple[torch.Tensor, torch.Tensor, list]:
     """Convert one split's raw logs into feature and label tensors.
 
-    Calls :func:`b2_features.features.build_user_day_features` to perform
+    Calls :func:`features.features.build_user_day_features` to perform
     feature engineering, then converts the resulting DataFrame to tensors.
 
     Args:
@@ -124,7 +124,7 @@ def build_features_tensor(
         :class:`~innersight.backend.models.embeddings.EmbeddingManager` for
         alignment with Node2Vec embeddings.
     """
-    from b2_features.features import build_user_day_features
+    from features.features import build_user_day_features
     from config import FEATURE_COLS
 
     df = build_user_day_features(split_logs, labels)
@@ -158,7 +158,7 @@ def build_dataloaders(
     lands in the :class:`TensorDataset` and flows into every training batch.
 
     Args:
-        data: Output of :func:`b2_data.pipeline.load_data`, containing
+        data: Output of :func:`data.pipeline.load_data`, containing
             ``data['splits']`` and ``data['labels']``.
         batch_size: Mini-batch size for the training loader (val/test use 256).
         embedding_manager: Optional
@@ -220,7 +220,7 @@ if __name__ == "__main__":
 
     # ── Try real data first ────────────────────────────────────────────
     try:
-        from b2_data.pipeline import load_data
+        from data.pipeline import load_data
 
         print("Loading real CERT r4.2 data …")
         data = load_data()

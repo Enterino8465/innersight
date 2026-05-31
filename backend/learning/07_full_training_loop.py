@@ -28,8 +28,8 @@ print("Loading data")
 print("=" * 60)
 
 try:
-    from innersight.backend.b2_data.pipeline import load_data
-    from innersight.backend.b2_features.features import build_features_for_split
+    from innersight.backend.data.pipeline import load_data
+    from innersight.backend.features.features import build_features_for_split
     data    = load_data()
     splits  = build_features_for_split(data)
     train_df, val_df, test_df = splits['train'], splits['val'], splits['test']

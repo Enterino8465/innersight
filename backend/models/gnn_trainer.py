@@ -1,6 +1,6 @@
 """GNN training loop for InsiderThreatGNN (HeteroGraphSAGE + classification head).
 
-Public API — same contract as b7_training.trainer.train() so the CLI, API, and
+Public API — same contract as training.trainer.train() so the CLI, API, and
 SSE streaming require no changes:
 
   train_gnn(config, event_callback=None) -> dict

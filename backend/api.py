@@ -14,11 +14,11 @@ import torch
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 
-from innersight.backend.b2_data.pipeline import load_data as _load_raw_data
-from innersight.backend.b2_features.features import build_user_day_features
-from innersight.backend.b7_training.trainer import train as run_train
-from innersight.backend.b8_scoring.scoring import load_alerts
-from innersight.backend.b9_feedback.feedback import apply_learn, apply_mute, apply_block
+from innersight.backend.data.pipeline import load_data as _load_raw_data
+from innersight.backend.features.features import build_user_day_features
+from innersight.backend.training.trainer import train as run_train
+from innersight.backend.scoring.scoring import load_alerts
+from innersight.backend.feedback.feedback import apply_learn, apply_mute, apply_block
 from innersight.backend.config import (
     DATA_DIR, LDAP_FILE, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
     FEATURE_COLS, DEFAULT_TRAINING_CONFIG, setup_logging,
@@ -180,7 +180,7 @@ def _validate_train_config(config: dict) -> str | None:
 
 
 def _alert_exists(alert_id: str) -> bool:
-    from innersight.backend.b8_scoring.scoring import _read_alerts_file
+    from innersight.backend.scoring.scoring import _read_alerts_file
     return any(a['id'] == alert_id for a in _read_alerts_file())
 
 

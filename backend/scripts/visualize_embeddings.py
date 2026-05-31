@@ -59,7 +59,7 @@ def _load_labels(data_dir: str) -> set:
     """Return set of malicious user IDs (empty when answers dir is absent)."""
     os.environ.setdefault('INNERSIGHT_DATA_DIR', data_dir)
     try:
-        from innersight.backend.b2_data.pipeline import load_data
+        from innersight.backend.data.pipeline import load_data
         data = load_data(data_dir)
         labels_raw = data['labels']   # set of (user, date) tuples
         return {uid for uid, _ in labels_raw}

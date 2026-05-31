@@ -402,7 +402,7 @@ def main() -> int:
     if args.data_dir and os.path.exists(args.data_dir):
         try:
             os.environ['INNERSIGHT_DATA_DIR'] = args.data_dir
-            from innersight.backend.b2_data.pipeline import load_data
+            from innersight.backend.data.pipeline import load_data
             print(f'Loading raw data from: {args.data_dir}')
             data   = load_data(args.data_dir)
             splits = data['splits']

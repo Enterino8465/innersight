@@ -65,7 +65,7 @@ def _write_fake_alerts(tmp_dir: str) -> None:
 def _patch_api(tmp_dir: str) -> None:
     """Redirect all file-path constants in api and scoring modules to tmp_dir."""
     import innersight.backend.api as api_mod
-    import innersight.backend.b8_scoring.scoring as scoring_mod
+    import innersight.backend.scoring.scoring as scoring_mod
     api_mod._BEST_MODEL_PT_PATH       = os.path.join(tmp_dir, "model.pt")
     api_mod._STANDARDIZER_PATH        = os.path.join(tmp_dir, "std.pt")
     api_mod._model_cache              = None

@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 import torch
 
-from innersight.backend.b2_data.pipeline import load_data
+from innersight.backend.data.pipeline import load_data
 
 
 # ── Synthetic dataset fixture ─────────────────────────────────────────────────
@@ -70,7 +70,7 @@ def synth_data_dir(tmp_path_factory):
 
 def _redirect_trainer(monkeypatch, tmp_path):
     """Patch trainer module paths to write into tmp_path."""
-    import innersight.backend.b7_training.trainer as t
+    import innersight.backend.training.trainer as t
     monkeypatch.setattr(t, "_BEST_MODEL_PT_PATH", str(tmp_path / "model.pt"))
     monkeypatch.setattr(t, "_BEST_MODEL_PATH",    str(tmp_path / "model.npz"))
     monkeypatch.setattr(t, "_PREPROCESSOR_PATH",  str(tmp_path / "prep.npz"))
@@ -79,7 +79,7 @@ def _redirect_trainer(monkeypatch, tmp_path):
 
 def _redirect_scoring(monkeypatch, tmp_path):
     """Patch scoring module paths to read from tmp_path / write alerts there."""
-    import innersight.backend.b8_scoring.scoring as s
+    import innersight.backend.scoring.scoring as s
     monkeypatch.setattr(s, "_BEST_MODEL_PT_PATH", str(tmp_path / "model.pt"))
     monkeypatch.setattr(s, "_STANDARDIZER_PATH",  str(tmp_path / "std.pt"))
     monkeypatch.setattr(s, "_ALERTS_PATH",        str(tmp_path / "alerts.json"))
@@ -108,7 +108,7 @@ def test_load_data_with_synthetic_csvs(synth_data_dir):
 @pytest.mark.slow
 def test_train_full_pipeline(tmp_path, monkeypatch, synth_data_dir):
     """train() completes on synthetic data and writes all expected checkpoints."""
-    import innersight.backend.b7_training.trainer as trainer_mod
+    import innersight.backend.training.trainer as trainer_mod
 
     data_dir, _ = synth_data_dir
 
@@ -152,7 +152,7 @@ def test_train_full_pipeline(tmp_path, monkeypatch, synth_data_dir):
 @pytest.mark.slow
 def test_checkpoint_is_valid_pytorch(tmp_path, monkeypatch, synth_data_dir):
     """Saved .pt checkpoint loads cleanly as InsiderThreatMLP state dict."""
-    import innersight.backend.b7_training.trainer as trainer_mod
+    import innersight.backend.training.trainer as trainer_mod
     from innersight.backend.models.mlp import InsiderThreatMLP
 
     data_dir, _ = synth_data_dir
@@ -174,8 +174,8 @@ def test_checkpoint_is_valid_pytorch(tmp_path, monkeypatch, synth_data_dir):
 @pytest.mark.slow
 def test_score_employees_after_training(tmp_path, monkeypatch, synth_data_dir):
     """score_employees() runs after training and returns valid alert dicts."""
-    import innersight.backend.b7_training.trainer as trainer_mod
-    import innersight.backend.b8_scoring.scoring as scoring_mod
+    import innersight.backend.training.trainer as trainer_mod
+    import innersight.backend.scoring.scoring as scoring_mod
 
     data_dir, test_date = synth_data_dir
 
@@ -223,8 +223,8 @@ def test_score_employees_after_training(tmp_path, monkeypatch, synth_data_dir):
 @pytest.mark.slow
 def test_load_alerts_after_scoring(tmp_path, monkeypatch, synth_data_dir):
     """load_alerts() and update_alert_status() work on the persisted results."""
-    import innersight.backend.b7_training.trainer as trainer_mod
-    import innersight.backend.b8_scoring.scoring as scoring_mod
+    import innersight.backend.training.trainer as trainer_mod
+    import innersight.backend.scoring.scoring as scoring_mod
 
     data_dir, test_date = synth_data_dir
 

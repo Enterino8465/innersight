@@ -1,9 +1,7 @@
 """PyTorch training loop for InsiderThreatMLP.
 
-Public API (consumed by api.py, scoring.py, feedback.py, main.py):
+Public API (consumed by api.py, scoring.py, feedback.py):
   train(config, event_callback)  — full training run
-  load_best_model()              — returns numpy Network (compat shim)
-  announce()                     — module descriptor for main.py
 """
 
 import copy
@@ -16,8 +14,7 @@ import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
-from innersight.backend.b2_data.pipeline import load_data
-from innersight.backend.b3_network.network import Network
+from innersight.backend.data.pipeline import load_data
 from innersight.backend.config import (
     PREPROCESSOR_FILE, BEST_MODEL_FILE, BEST_MODEL_PT_FILE,
     STANDARDIZER_FILE, DEFAULT_TRAINING_CONFIG,
@@ -225,11 +222,7 @@ def train(config: dict, event_callback=None, embedding_manager=None):
 
 
 def _save_model(model: InsiderThreatMLP) -> None:
-    """Save model in PyTorch format (.pt) and legacy numpy format (.npz).
-
-    The .npz file keeps scoring.py / feedback.py / load_best_model() working
-    without changes while the .pt file is the canonical new checkpoint.
-    """
+    """Save model in PyTorch format (.pt) and legacy numpy format (.npz)."""
     os.makedirs(os.path.dirname(_BEST_MODEL_PT_PATH), exist_ok=True)
 
     # ── PyTorch checkpoint (includes layer_sizes so loaders don't need to guess) ─
@@ -248,26 +241,3 @@ def _save_model(model: InsiderThreatMLP) -> None:
     arrays['n_layers'] = np.array(len(linear_layers))
     np.savez(_BEST_MODEL_PATH, **arrays)
 
-
-def load_best_model() -> Network:
-    """Load the best checkpoint as a numpy Network.
-
-    Returns a ``Network`` instance compatible with scoring.py and feedback.py
-    (which use the hand-rolled numpy forward pass, AdamOptimizer, etc.).
-    """
-    data     = np.load(_BEST_MODEL_PATH)
-    n_layers = int(data['n_layers'])
-
-    weights = [data[f'W_{i}'] for i in range(n_layers)]
-    biases  = [data[f'b_{i}'] for i in range(n_layers)]
-
-    layer_sizes = [weights[0].shape[0]] + [W.shape[1] for W in weights]
-    net         = Network(layer_sizes)
-    net.weights = weights
-    net.biases  = biases
-    return net
-
-
-def announce() -> None:
-    """Print a one-line module descriptor (consumed by main.py)."""
-    print('b7_training.trainer  — PyTorch training loop (InsiderThreatMLP)')

@@ -157,7 +157,7 @@ def main() -> int:
         return 0
 
     # ── MLP / Node2Vec path ───────────────────────────────────────────────────
-    from innersight.backend.b7_training.trainer import train
+    from innersight.backend.training.trainer import train
     from innersight.backend.config import BEST_MODEL_PT_FILE, PREPROCESSOR_FILE
 
     training  = cfg.get('training', {})

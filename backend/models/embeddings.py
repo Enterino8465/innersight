@@ -176,7 +176,7 @@ if __name__ == '__main__':
         print(f'  users in graph: {len(mgr.user_to_idx):,}')  # type: ignore[arg-type]
 
     # ── 2. Build real training features ──────────────────────────────────────
-    from innersight.backend.b2_data.pipeline import load_data
+    from innersight.backend.data.pipeline import load_data
     from innersight.backend.models.dataset import build_features_tensor
 
     print(f'\nLoading data from: {args.data_dir}')
