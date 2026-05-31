@@ -8,9 +8,10 @@ if _root not in sys.path:
 
 import numpy as np
 import torch
-from innersight.backend.b3_network.network import Network
-from innersight.backend.b5_backprop.backprop import backward
-from innersight.backend.b4_loss.loss import compute_loss
+# NOTE: b3_network, b4_loss, b5_backprop were deleted in Phase 0 cleanup — archived/non-runnable
+# from innersight.backend.b3_network.network import Network
+# from innersight.backend.b5_backprop.backprop import backward
+# from innersight.backend.b4_loss.loss import compute_loss
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 np.random.seed(0)

@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 import numpy as np
 import torch
-from b3_network.network import Network
+# NOTE: b3_network was deleted in Phase 0 cleanup — this script is archived/non-runnable
+# from b3_network.network import Network
 
 # ── 1. NumPy forward pass ─────────────────────────────────────────────────────
 np.random.seed(42)

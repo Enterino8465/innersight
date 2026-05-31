@@ -1,9 +1,17 @@
 """Tests for the GNN training loop (models/gnn_trainer.py)."""
 
 import copy
+import importlib
 import os
 import pytest
 import torch
+
+# NeighborLoader requires pyg-lib or torch-sparse; skip the whole module if absent.
+_pyg_sparse = importlib.util.find_spec('pyg_lib') or importlib.util.find_spec('torch_sparse')
+pytestmark = pytest.mark.skipif(
+    _pyg_sparse is None,
+    reason='pyg-lib or torch-sparse required for NeighborLoader (GNN tests)',
+)
 
 from innersight.backend.models.gnn_trainer import train_gnn
 

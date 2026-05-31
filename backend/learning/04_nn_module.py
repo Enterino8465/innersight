@@ -8,7 +8,8 @@ if _root not in sys.path:
 import numpy as np
 import torch
 import torch.nn as nn
-from innersight.backend.b3_network.network import Network
+# NOTE: b3_network was deleted in Phase 0 cleanup — this script is archived/non-runnable
+# from innersight.backend.b3_network.network import Network
 
 
 class InsiderThreatMLP(nn.Module):

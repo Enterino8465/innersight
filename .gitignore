@@ -25,3 +25,12 @@ node_modules/
 
 # Logs
 *.log
+
+# Office lock files
+~$*.docx
+~$*.xlsx
+~$*.pptx
+.~lock.*
+
+# NumPy checkpoint artifacts (legacy format — use .pt checkpoints instead)
+*.npz

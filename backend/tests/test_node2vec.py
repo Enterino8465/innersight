@@ -1,8 +1,16 @@
 """Tests for backend/models/node2vec_trainer.py."""
 
+import importlib
 import torch
 import pytest
 from torch_geometric.data import HeteroData
+
+# Node2Vec requires pyg-lib or torch-cluster; skip the whole module if absent.
+_pyg_cluster = importlib.util.find_spec('pyg_lib') or importlib.util.find_spec('torch_cluster')
+pytestmark = pytest.mark.skipif(
+    _pyg_cluster is None,
+    reason='pyg-lib or torch-cluster required for Node2Vec (node2vec tests)',
+)
 
 from innersight.backend.models.node2vec_trainer import (
     _hetero_to_homo,
