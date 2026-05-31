@@ -1,3 +1,10 @@
+"""Central configuration for InnerSight UEBA.
+
+Reads all tuneable values from environment variables or falls back to
+sensible defaults.  Import individual constants from here; never hard-code
+paths or thresholds elsewhere in the codebase.
+"""
+
 import logging
 import os
 

@@ -1,3 +1,21 @@
+"""Flask REST API for InnerSight UEBA.
+
+Exposes endpoints for training control, alert management, employee risk
+queries, and score-history streaming.  All model I/O is lazy-cached at the
+module level and invalidated whenever a new checkpoint is written.
+
+Public endpoints:
+  GET  /api/config
+  POST /api/train
+  GET  /api/events
+  GET  /api/status
+  GET  /api/alerts
+  GET  /api/employees
+  GET  /api/employee/<user_id>/activity
+  GET  /api/employee/<user_id>/score-history
+  POST /api/alert/<alert_id>/(learn|mute|block)
+"""
+
 import json
 import logging
 import os

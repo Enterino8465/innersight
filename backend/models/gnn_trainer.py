@@ -38,6 +38,7 @@ import copy
 import logging
 import os
 import sys
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -59,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _emit(callback, event: dict) -> None:
+def _emit(callback: Callable[[dict], None] | None, event: dict) -> None:
     if callback is not None:
         callback(event)
 
@@ -131,7 +132,11 @@ def _evaluate_gnn(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def train_gnn(config: dict, event_callback=None, graphs: dict | None = None) -> dict:
+def train_gnn(
+    config: dict[str, Any],
+    event_callback: Callable[[dict], None] | None = None,
+    graphs: dict | None = None,
+) -> dict[str, float]:
     """Train InsiderThreatGNN and save the best checkpoint by val F1.
 
     Parameters

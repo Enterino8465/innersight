@@ -1,4 +1,17 @@
+"""Feature engineering for insider-threat detection.
+
+Transforms raw CERT log DataFrames into a per-(user, day) feature matrix.
+
+Public API:
+  build_user_day_features(logs_dict, malicious_tuples) -> pd.DataFrame
+  build_features_for_split(data)                       -> dict[str, pd.DataFrame]
+"""
+
+from __future__ import annotations
+
 import logging
+from typing import Any
+
 import pandas as pd
 
 from innersight.backend.config import (
@@ -143,7 +156,10 @@ def _http_features(http_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def build_user_day_features(logs_dict: dict, malicious_tuples: set) -> pd.DataFrame:
+def build_user_day_features(
+    logs_dict: dict[str, pd.DataFrame],
+    malicious_tuples: set,
+) -> pd.DataFrame:
     logon_f  = _logon_features(logs_dict.get('logon',  pd.DataFrame()))
     device_f = _device_features(logs_dict.get('device', pd.DataFrame()))
     file_f   = _file_features(logs_dict.get('file',   pd.DataFrame()))
@@ -196,7 +212,7 @@ def build_user_day_features(logs_dict: dict, malicious_tuples: set) -> pd.DataFr
     return merged[feature_cols].reset_index(drop=True)
 
 
-def build_features_for_split(data: dict) -> dict:
+def build_features_for_split(data: dict[str, Any]) -> dict[str, pd.DataFrame]:
     labels = data['labels']
     result = {}
     for split_name, logs_dict in data['splits'].items():

@@ -7,12 +7,11 @@ Public API (consumed by api.py, scoring.py, feedback.py):
 import copy
 import logging
 import os
+from typing import Any, Callable
 
 import numpy as np
 import torch
 import torch.nn as nn
-
-logger = logging.getLogger(__name__)
 
 from innersight.backend.data.pipeline import load_data
 from innersight.backend.config import (
@@ -20,6 +19,8 @@ from innersight.backend.config import (
 )
 from innersight.backend.models.mlp import InsiderThreatMLP, build_mlp
 from innersight.backend.models.dataset import build_dataloaders
+
+logger = logging.getLogger(__name__)
 
 _BEST_MODEL_PT_PATH = BEST_MODEL_PT_FILE
 _STANDARDIZER_PATH  = STANDARDIZER_FILE
@@ -29,7 +30,7 @@ _STANDARDIZER_PATH  = STANDARDIZER_FILE
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _emit(event_callback, event: dict) -> None:
+def _emit(event_callback: Callable[[dict], None] | None, event: dict) -> None:
     if event_callback is not None:
         event_callback(event)
 
@@ -81,7 +82,11 @@ def _confusion_matrix(preds: np.ndarray, labels: np.ndarray) -> list[list[int]]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def train(config: dict, event_callback=None, embedding_manager=None):
+def train(
+    config: dict[str, Any],
+    event_callback: Callable[[dict], None] | None = None,
+    embedding_manager: Any | None = None,
+) -> dict[str, float]:
     """Train InsiderThreatMLP and persist the best checkpoint.
 
     Keeps the same event-callback contract as the legacy numpy trainer so

@@ -10,8 +10,6 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-logger = logging.getLogger(__name__)
-
 from innersight.backend.data.pipeline import load_data
 from innersight.backend.features.features import build_user_day_features
 from innersight.backend.scoring.scoring import update_alert_status, _read_alerts_file
@@ -28,6 +26,8 @@ from innersight.backend.config import (
 from innersight.backend.models.mlp import InsiderThreatMLP, get_device
 from innersight.backend.models.dataset import Standardizer
 from innersight.backend.utils import safe_json_read, safe_json_write
+
+logger = logging.getLogger(__name__)
 
 # Number of gradient steps taken per online correction
 _CORRECTION_STEPS = 3

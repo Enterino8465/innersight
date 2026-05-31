@@ -1,6 +1,16 @@
+"""Shared I/O utilities used across the InnerSight backend.
+
+Public API:
+  safe_json_write(filepath, data)  — atomic write with fsync
+  safe_json_read(filepath, default) — read with graceful fallback
+"""
+
+from __future__ import annotations
+
 import json
 import logging
 import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +33,7 @@ def safe_json_write(filepath: str, data) -> None:
         raise
 
 
-def safe_json_read(filepath: str, default=None):
+def safe_json_read(filepath: str, default: Any = None) -> Any:
     try:
         with open(filepath) as f:
             return json.load(f)

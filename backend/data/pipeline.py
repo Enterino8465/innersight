@@ -1,5 +1,18 @@
+"""Raw data loading and temporal splitting for CERT log files.
+
+Public API:
+  load_raw_logs(data_dir)            — read all five CSV log types
+  load_labels(answers_dir)           — parse malicious (user, date) pairs
+  time_split(logs_dict, train_end, val_end) — temporal train/val/test split
+  load_data(data_dir)                — convenience wrapper for all of the above
+"""
+
+from __future__ import annotations
+
 import logging
 import os
+from typing import Any
+
 import pandas as pd
 
 from innersight.backend.config import DATA_DIR, TRAIN_END_DATE, VAL_END_DATE
@@ -28,7 +41,7 @@ _EMPTY_COLS = {
 }
 
 
-def load_raw_logs(data_dir=DATA_DIR):
+def load_raw_logs(data_dir: str = DATA_DIR) -> dict[str, pd.DataFrame]:
     dfs = {}
     for name in LOG_FILES:
         path = os.path.join(data_dir, f'{name}.csv')
@@ -56,7 +69,7 @@ def load_raw_logs(data_dir=DATA_DIR):
     return dfs
 
 
-def load_labels(answers_dir):
+def load_labels(answers_dir: str) -> set[tuple[str, Any]]:
     if not os.path.exists(answers_dir):
         logger.warning('load_labels | answers directory not found: %s — no labels loaded', answers_dir)
         return set()
@@ -84,7 +97,11 @@ def load_labels(answers_dir):
     return malicious
 
 
-def time_split(logs_dict, train_end, val_end):
+def time_split(
+    logs_dict: dict[str, pd.DataFrame],
+    train_end: str,
+    val_end: str,
+) -> dict[str, dict[str, pd.DataFrame]]:
     t_train = pd.Timestamp(train_end)
     t_val   = pd.Timestamp(val_end)
 
@@ -113,7 +130,7 @@ def time_split(logs_dict, train_end, val_end):
     return splits
 
 
-def load_data(data_dir=DATA_DIR):
+def load_data(data_dir: str = DATA_DIR) -> dict[str, Any]:
     if not os.path.exists(data_dir):
         raise FileNotFoundError(
             f'Data directory not found: {data_dir}. '
