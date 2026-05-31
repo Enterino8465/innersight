@@ -2,7 +2,7 @@ import logging
 import os
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_DIR  = os.environ.get('INNERSIGHT_DATA_DIR',   'innersight/data/cert_r4.2')
+DATA_DIR  = os.environ.get('INNERSIGHT_DATA_DIR',   '')
 MODEL_DIR = os.environ.get('INNERSIGHT_MODEL_DIR',  'innersight/data')
 
 ALERTS_FILE       = os.path.join(MODEL_DIR, 'alerts.json')
@@ -14,7 +14,7 @@ BEST_MODEL_PT_FILE  = os.path.join(MODEL_DIR, 'best_model.pt')    # PyTorch chec
 STANDARDIZER_FILE   = os.path.join(MODEL_DIR, 'standardizer.pt')  # PyTorch standardizer
 LDAP_FILE         = os.path.join(DATA_DIR,  'LDAP.csv')
 
-# ── CERT r4.2 split dates ─────────────────────────────────────────────────────
+# ── Default temporal split dates (override via config YAML per version) ───────
 TRAIN_END_DATE = '2010-09-30'
 VAL_END_DATE   = '2010-11-30'
 

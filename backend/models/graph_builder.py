@@ -1634,7 +1634,9 @@ def build_temporal_graphs(data: dict | None = None) -> dict:
     """
     if data is None:
         from innersight.backend.data.pipeline import load_raw_logs, load_labels
-        _data_dir = os.environ.get('INNERSIGHT_DATA_DIR', 'innersight/data/cert_r4.2')
+        _data_dir = os.environ.get('INNERSIGHT_DATA_DIR')
+        if not _data_dir:
+            raise EnvironmentError("INNERSIGHT_DATA_DIR environment variable must be set")
         logger.info('Loading raw logs from %s', _data_dir)
         _logs   = load_raw_logs(_data_dir)
         _labels = load_labels(os.path.join(_data_dir, 'answers'))

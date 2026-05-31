@@ -15,7 +15,7 @@ Usage
 -----
     python scripts/visualize_embeddings.py \\
         --embeddings checkpoints/node2vec_embeddings.pt \\
-        --data-dir   innersight/data/cert_r4.2 \\
+        --data-dir   $INNERSIGHT_DATA_DIR \\
         --output-dir outputs/
 """
 
@@ -71,7 +71,7 @@ def _load_labels(data_dir: str) -> set:
 def _load_ldap_departments(data_dir: str) -> dict[str, str]:
     """Map user_id → department.  Parses LDAP.csv if present; else returns {}."""
     ldap_path = os.path.join(data_dir, 'LDAP', 'month-1.csv')
-    # CERT r4.2 has LDAP/ subdir with one CSV per month; month-1 covers all employees
+    # CERT data has LDAP/ subdir with one CSV per month; month-1 covers all employees
     alt_paths = [
         ldap_path,
         os.path.join(data_dir, 'ldap.csv'),
@@ -288,8 +288,7 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Visualize user graph embeddings.')
     p.add_argument('--embeddings',  default='checkpoints/node2vec_embeddings.pt',
                    help='Path to .pt embeddings file')
-    p.add_argument('--data-dir',    default=os.environ.get('INNERSIGHT_DATA_DIR',
-                                                            'innersight/data/cert_r4.2'),
+    p.add_argument('--data-dir',    default=os.environ.get('INNERSIGHT_DATA_DIR', ''),
                    help='CERT data directory (for labels + LDAP)')
     p.add_argument('--output-dir',  default='outputs',
                    help='Directory to save PNG files')

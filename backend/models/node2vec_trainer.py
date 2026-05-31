@@ -324,7 +324,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
     ap = argparse.ArgumentParser(description='Train Node2Vec on the CERT training graph.')
-    ap.add_argument('--data-dir',  default=os.environ.get('INNERSIGHT_DATA_DIR',  'innersight/data/cert_r4.2'),
+    ap.add_argument('--data-dir',  default=os.environ.get('INNERSIGHT_DATA_DIR', ''),
                     help='Path to CERT log CSVs (INNERSIGHT_DATA_DIR)')
     ap.add_argument('--model-dir', default=os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints'),
                     help='Checkpoint directory (INNERSIGHT_MODEL_DIR)')
@@ -332,6 +332,8 @@ if __name__ == '__main__':
     ap.add_argument('--emb-dim',   type=int,   default=128, help='Embedding dimension')
     ap.add_argument('--q',         type=float, default=0.8, help='Node2Vec in-out parameter')
     args = ap.parse_args()
+    if not args.data_dir:
+        ap.error('--data-dir or INNERSIGHT_DATA_DIR required')
 
     os.environ['INNERSIGHT_DATA_DIR']  = args.data_dir
     os.environ['INNERSIGHT_MODEL_DIR'] = args.model_dir

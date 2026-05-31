@@ -33,7 +33,7 @@ try:
     data    = load_data()
     splits  = build_features_for_split(data)
     train_df, val_df, test_df = splits['train'], splits['val'], splits['test']
-    print("Loaded real CERT r4.2 dataset.")
+    print("Loaded real CERT dataset.")
 except FileNotFoundError as e:
     print(f"CERT dataset not found — using synthetic data.")
     print(f"(Set INNERSIGHT_DATA_DIR to use real data.)\n")

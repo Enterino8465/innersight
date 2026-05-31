@@ -154,9 +154,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
     ap = argparse.ArgumentParser(description='Test EmbeddingManager on real CERT features.')
-    ap.add_argument('--data-dir',  default=os.environ.get('INNERSIGHT_DATA_DIR',  'innersight/data/cert_r4.2'))
+    ap.add_argument('--data-dir',  default=os.environ.get('INNERSIGHT_DATA_DIR', ''))
     ap.add_argument('--model-dir', default=os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints'))
     args = ap.parse_args()
+    if not args.data_dir:
+        ap.error('--data-dir or INNERSIGHT_DATA_DIR required')
 
     os.environ['INNERSIGHT_DATA_DIR']  = args.data_dir
     os.environ['INNERSIGHT_MODEL_DIR'] = args.model_dir

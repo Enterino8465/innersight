@@ -8,7 +8,7 @@ Usage
     python scripts/compare_models.py
 
     # Full three-model (needs CERT CSV data for the MLP models):
-    python scripts/compare_models.py --data-dir /path/to/cert_r4.2
+    python scripts/compare_models.py --data-dir /path/to/cert_data
 
     # Override checkpoint paths:
     python scripts/compare_models.py \\

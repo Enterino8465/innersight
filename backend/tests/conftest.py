@@ -16,7 +16,7 @@ def tmp_dir(tmp_path):
 
 @pytest.fixture()
 def logon_csv(tmp_path):
-    """Tiny logon.csv (5 rows) matching CERT r4.2 schema."""
+    """Tiny logon.csv (5 rows) matching CERT schema."""
     df = pd.DataFrame({
         'id':       [f'L{i}' for i in range(5)],
         'date':     pd.to_datetime(['2010-06-01', '2010-06-01', '2010-07-15',

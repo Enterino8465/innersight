@@ -222,7 +222,7 @@ if __name__ == "__main__":
     try:
         from data.pipeline import load_data
 
-        print("Loading real CERT r4.2 data …")
+        print("Loading real CERT data …")
         data = load_data()
         loaders = build_dataloaders(data)
 

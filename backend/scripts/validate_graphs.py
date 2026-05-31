@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 W  = 76        # table width
 W2 = 60        # narrow table width
 
-# Expected counts for the real CERT r4.2 dataset (used for warnings only).
+# Expected counts for the real CERT dataset (used for warnings only).
 EXPECTED_USERS   = 1000
 EXPECTED_POS_MAX = 100   # upper bound on malicious users in any single window
 
@@ -295,7 +295,7 @@ def validate_graph(split: str, g, results: CheckResult) -> None:
     if n_user < EXPECTED_USERS:
         results.warn(
             f'{pfx} n_users={n_user} < expected {EXPECTED_USERS} '
-            f'(real CERT r4.2 has ~1000 users; this may be synthetic data)',
+            f'(real CERT dataset has ~1000 users; this may be synthetic data)',
         )
 
     # 11. Plausible malicious count

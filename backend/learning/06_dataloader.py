@@ -25,7 +25,7 @@ try:
     train_df = splits['train']
     val_df   = splits['val']
     test_df  = splits['test']
-    print("Loaded real CERT r4.2 dataset.")
+    print("Loaded real CERT dataset.")
     using_real = True
 
 except FileNotFoundError as e:

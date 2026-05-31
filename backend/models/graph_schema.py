@@ -1,6 +1,6 @@
 """Heterogeneous graph schema for the InnerSight UEBA system.
 
-The graph is built from CERT r4.2 event logs and represents user behaviour
+The graph is built from CERT event logs and represents user behaviour
 as a network of entities and interactions. A single graph covers one time
 window (e.g. one week); nodes accumulate feature vectors from the raw logs
 and edges carry the temporal/contextual attributes of each event.
