@@ -158,7 +158,7 @@ def main() -> int:
 
     # ── MLP / Node2Vec path ───────────────────────────────────────────────────
     from innersight.backend.training.trainer import train
-    from innersight.backend.config import BEST_MODEL_PT_FILE, PREPROCESSOR_FILE
+    from innersight.backend.config import BEST_MODEL_PT_FILE, STANDARDIZER_FILE
 
     training  = cfg.get('training', {})
     model_sec = cfg.get('model', {})
@@ -222,7 +222,7 @@ def main() -> int:
           f"{results['test_recall']:.3f} / {results['test_f1']:.4f}")
     print(f"\nCheckpoints saved:")
     print(f"  model        : {BEST_MODEL_PT_FILE}")
-    print(f"  preprocessor : {PREPROCESSOR_FILE}")
+    print(f"  standardizer : {STANDARDIZER_FILE}")
     print(f"  log          : {log_file}")
 
     return 0

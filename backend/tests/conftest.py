@@ -1,7 +1,6 @@
 import json
 import os
 import pytest
-import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import TensorDataset, DataLoader
@@ -41,38 +40,26 @@ def small_mlp():
 def tmp_model_checkpoint(tmp_path):
     """Save a fresh model + fitted standardizer to tmp_path.
 
-    Returns a dict with 'pt_path', 'npz_path', 'std_path' so tests can
-    patch module-level path constants.
+    Returns a dict with 'pt_path', 'std_path' so tests can patch
+    module-level path constants.
     """
     from innersight.backend.models.mlp import InsiderThreatMLP
     from innersight.backend.models.dataset import Standardizer
-    import torch.nn as nn
-    import numpy as np
 
     layer_sizes = [18, 8, 1]
     model = InsiderThreatMLP(layer_sizes)
 
     pt_path  = str(tmp_path / 'best_model.pt')
-    npz_path = str(tmp_path / 'best_model.npz')
     std_path = str(tmp_path / 'standardizer.pt')
 
-    torch.save({"state_dict": model.state_dict(), "layer_sizes": layer_sizes}, pt_path)
-
-    # Numpy compat snapshot (same layout as trainer._save_model)
-    linear_layers = [m for m in model.net if isinstance(m, nn.Linear)]
-    arrays: dict = {}
-    for i, layer in enumerate(linear_layers):
-        arrays[f'W_{i}'] = layer.weight.detach().numpy().T
-        arrays[f'b_{i}'] = layer.bias.detach().numpy().reshape(1, -1)
-    arrays['n_layers'] = np.array(len(linear_layers))
-    np.savez(npz_path, **arrays)
+    torch.save({"state_dict": model.state_dict(), "layer_sizes": layer_sizes,
+                "model_type": "mlp"}, pt_path)
 
     std = Standardizer()
     std.fit(torch.randn(100, 18))
     std.save(std_path)
 
-    return {'pt_path': pt_path, 'npz_path': npz_path, 'std_path': std_path,
-            'layer_sizes': layer_sizes}
+    return {'pt_path': pt_path, 'std_path': std_path, 'layer_sizes': layer_sizes}
 
 
 @pytest.fixture()

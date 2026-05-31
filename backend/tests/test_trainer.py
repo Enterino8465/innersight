@@ -12,8 +12,7 @@ def test_train_smoke(tmp_path, monkeypatch, synthetic_loaders):
 
     # Redirect all file I/O to tmp_path
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
-    monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PATH',    str(tmp_path / 'model.npz'))
-    monkeypatch.setattr(trainer_mod, '_PREPROCESSOR_PATH',  str(tmp_path / 'prep.npz'))
+
     monkeypatch.setattr(trainer_mod, '_STANDARDIZER_PATH',  str(tmp_path / 'std.pt'))
 
     # Bypass data loading and feature engineering
@@ -35,8 +34,6 @@ def test_train_smoke(tmp_path, monkeypatch, synthetic_loaders):
 
     # Checkpoints written
     assert os.path.exists(str(tmp_path / 'model.pt')),   "PyTorch checkpoint missing"
-    assert os.path.exists(str(tmp_path / 'model.npz')),  "Numpy compat checkpoint missing"
-    assert os.path.exists(str(tmp_path / 'prep.npz')),   "Numpy preprocessor missing"
     assert os.path.exists(str(tmp_path / 'std.pt')),     "PyTorch standardizer missing"
 
     # Event stream was emitted
@@ -53,8 +50,7 @@ def test_train_class_imbalance_event(tmp_path, monkeypatch, synthetic_loaders):
     import innersight.backend.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
-    monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PATH',    str(tmp_path / 'model.npz'))
-    monkeypatch.setattr(trainer_mod, '_PREPROCESSOR_PATH',  str(tmp_path / 'prep.npz'))
+
     monkeypatch.setattr(trainer_mod, '_STANDARDIZER_PATH',  str(tmp_path / 'std.pt'))
     monkeypatch.setattr(trainer_mod, 'load_data',        lambda: {})
     monkeypatch.setattr(trainer_mod, 'build_dataloaders',
@@ -75,8 +71,7 @@ def test_train_epoch_events_match_config(tmp_path, monkeypatch, synthetic_loader
     import innersight.backend.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
-    monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PATH',    str(tmp_path / 'model.npz'))
-    monkeypatch.setattr(trainer_mod, '_PREPROCESSOR_PATH',  str(tmp_path / 'prep.npz'))
+
     monkeypatch.setattr(trainer_mod, '_STANDARDIZER_PATH',  str(tmp_path / 'std.pt'))
     monkeypatch.setattr(trainer_mod, 'load_data',        lambda: {})
     monkeypatch.setattr(trainer_mod, 'build_dataloaders',
@@ -100,8 +95,7 @@ def test_train_checkpoint_is_loadable(tmp_path, monkeypatch, synthetic_loaders):
 
     pt_path = str(tmp_path / 'model.pt')
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', pt_path)
-    monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PATH',    str(tmp_path / 'model.npz'))
-    monkeypatch.setattr(trainer_mod, '_PREPROCESSOR_PATH',  str(tmp_path / 'prep.npz'))
+
     monkeypatch.setattr(trainer_mod, '_STANDARDIZER_PATH',  str(tmp_path / 'std.pt'))
     monkeypatch.setattr(trainer_mod, 'load_data',        lambda: {})
     monkeypatch.setattr(trainer_mod, 'build_dataloaders',
@@ -122,8 +116,7 @@ def test_train_early_stopping(tmp_path, monkeypatch, synthetic_loaders):
     import innersight.backend.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
-    monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PATH',    str(tmp_path / 'model.npz'))
-    monkeypatch.setattr(trainer_mod, '_PREPROCESSOR_PATH',  str(tmp_path / 'prep.npz'))
+
     monkeypatch.setattr(trainer_mod, '_STANDARDIZER_PATH',  str(tmp_path / 'std.pt'))
     monkeypatch.setattr(trainer_mod, 'load_data',        lambda: {})
     monkeypatch.setattr(trainer_mod, 'build_dataloaders',

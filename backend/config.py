@@ -8,8 +8,6 @@ MODEL_DIR = os.environ.get('INNERSIGHT_MODEL_DIR',  'innersight/data')
 ALERTS_FILE       = os.path.join(MODEL_DIR, 'alerts.json')
 CORRECTIONS_FILE  = os.path.join(MODEL_DIR, 'corrections.json')
 BLOCK_LOG_FILE    = os.path.join(MODEL_DIR, 'block_log.json')
-PREPROCESSOR_FILE = os.path.join(MODEL_DIR, 'preprocessor.npz')   # numpy — compat
-BEST_MODEL_FILE   = os.path.join(MODEL_DIR, 'best_model.npz')     # numpy — compat
 BEST_MODEL_PT_FILE  = os.path.join(MODEL_DIR, 'best_model.pt')    # PyTorch checkpoint
 STANDARDIZER_FILE   = os.path.join(MODEL_DIR, 'standardizer.pt')  # PyTorch standardizer
 # LDAP: loaded from DATA_DIR/LDAP/ directory (monthly snapshots). See Phase 1 pipeline.

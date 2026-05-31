@@ -72,8 +72,6 @@ def _redirect_trainer(monkeypatch, tmp_path):
     """Patch trainer module paths to write into tmp_path."""
     import innersight.backend.training.trainer as t
     monkeypatch.setattr(t, "_BEST_MODEL_PT_PATH", str(tmp_path / "model.pt"))
-    monkeypatch.setattr(t, "_BEST_MODEL_PATH",    str(tmp_path / "model.npz"))
-    monkeypatch.setattr(t, "_PREPROCESSOR_PATH",  str(tmp_path / "prep.npz"))
     monkeypatch.setattr(t, "_STANDARDIZER_PATH",  str(tmp_path / "std.pt"))
 
 
@@ -127,8 +125,8 @@ def test_train_full_pipeline(tmp_path, monkeypatch, synth_data_dir):
     events = []
     result = trainer_mod.train(config, event_callback=events.append)
 
-    # All four checkpoint files must exist
-    for fname in ("model.pt", "model.npz", "prep.npz", "std.pt"):
+    # Checkpoint files must exist
+    for fname in ("model.pt", "std.pt"):
         path = str(tmp_path / fname)
         assert os.path.exists(path), f"Missing checkpoint: {fname}"
         assert os.path.getsize(path) > 0, f"Empty checkpoint: {fname}"

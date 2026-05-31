@@ -16,16 +16,13 @@ logger = logging.getLogger(__name__)
 
 from innersight.backend.data.pipeline import load_data
 from innersight.backend.config import (
-    PREPROCESSOR_FILE, BEST_MODEL_FILE, BEST_MODEL_PT_FILE,
-    STANDARDIZER_FILE, DEFAULT_TRAINING_CONFIG,
+    BEST_MODEL_PT_FILE, STANDARDIZER_FILE, DEFAULT_TRAINING_CONFIG,
 )
 from innersight.backend.models.mlp import InsiderThreatMLP, build_mlp
 from innersight.backend.models.dataset import build_dataloaders
 
-_PREPROCESSOR_PATH  = PREPROCESSOR_FILE   # .npz — compat with api.py / feedback.py
-_BEST_MODEL_PATH    = BEST_MODEL_FILE      # .npz — compat with load_best_model()
-_BEST_MODEL_PT_PATH = BEST_MODEL_PT_FILE   # .pt  — canonical PyTorch checkpoint
-_STANDARDIZER_PATH  = STANDARDIZER_FILE    # .pt  — PyTorch standardizer
+_BEST_MODEL_PT_PATH = BEST_MODEL_PT_FILE
+_STANDARDIZER_PATH  = STANDARDIZER_FILE
 
 
 # ---------------------------------------------------------------------------
@@ -202,14 +199,6 @@ def train(config: dict, event_callback=None, embedding_manager=None):
 
     # ── 6. Persist ────────────────────────────────────────────────────────────
     _save_model(model)
-
-    # Preprocessor: save in both formats.
-    # .npz — backward compat with api.py / feedback.py (np.load)
-    # .pt  — for scoring.py PyTorch path (Standardizer.load)
-    mean_np = standardizer.mean.cpu().numpy()  # type: ignore[union-attr]
-    std_np  = standardizer.std.cpu().numpy()   # type: ignore[union-attr]
-    os.makedirs(os.path.dirname(_PREPROCESSOR_PATH), exist_ok=True)
-    np.savez(_PREPROCESSOR_PATH, mean=mean_np, std=std_np)
     standardizer.save(_STANDARDIZER_PATH)
 
     return {
@@ -222,22 +211,10 @@ def train(config: dict, event_callback=None, embedding_manager=None):
 
 
 def _save_model(model: InsiderThreatMLP) -> None:
-    """Save model in PyTorch format (.pt) and legacy numpy format (.npz)."""
+    """Save model as a PyTorch checkpoint (.pt)."""
     os.makedirs(os.path.dirname(_BEST_MODEL_PT_PATH), exist_ok=True)
-
-    # ── PyTorch checkpoint (includes layer_sizes so loaders don't need to guess) ─
     torch.save(
         {"state_dict": model.state_dict(), "layer_sizes": model.layer_sizes, "model_type": "mlp"},
         _BEST_MODEL_PT_PATH,
     )
-
-    # ── Legacy numpy checkpoint (in, out) weights ─────────────────────────────
-    # nn.Linear stores weight as (out, in); Network expects (in, out).
-    linear_layers = [m for m in model.net if isinstance(m, nn.Linear)]
-    arrays: dict = {}
-    for i, layer in enumerate(linear_layers):
-        arrays[f'W_{i}'] = layer.weight.detach().cpu().numpy().T          # (in, out)
-        arrays[f'b_{i}'] = layer.bias.detach().cpu().numpy().reshape(1, -1)  # (1, out)
-    arrays['n_layers'] = np.array(len(linear_layers))
-    np.savez(_BEST_MODEL_PATH, **arrays)
 

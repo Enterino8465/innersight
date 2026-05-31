@@ -20,7 +20,6 @@ from innersight.backend.config import (
     CORRECTIONS_FILE  as _CORRECTIONS_PATH,
     BLOCK_LOG_FILE    as _BLOCK_LOG_PATH,
     BEST_MODEL_PT_FILE  as _BEST_MODEL_PT_PATH,
-    BEST_MODEL_FILE     as _BEST_MODEL_PATH,    # .npz — legacy numpy checkpoint
     STANDARDIZER_FILE   as _STANDARDIZER_PATH,
     FEATURE_COLS      as _FEATURE_COLS,
     CORRECTION_LR,
@@ -43,8 +42,8 @@ def apply_learn(alert_id: str) -> dict:
 
     Appends a correction record (label=0) to the corrections log, loads the
     current PyTorch checkpoint, runs a few gradient steps to push the model
-    toward predicting "normal" for this user-day, saves both the ``.pt`` and
-    legacy ``.npz`` checkpoints, then sets the alert status to ``'learned'``.
+    toward predicting "normal" for this user-day, saves the updated ``.pt``
+    checkpoint, then sets the alert status to ``'learned'``.
 
     Args:
         alert_id: UUID of the alert to correct.
@@ -220,27 +219,12 @@ def _features_for_correction(correction: dict) -> Optional[torch.Tensor]:
 
 
 def _save_model(model: InsiderThreatMLP) -> None:
-    """Save *model* in both PyTorch (.pt) and legacy numpy (.npz) formats.
-
-    The .npz file keeps ``load_best_model()`` and ``api.py``'s ``_get_model()``
-    working without any changes.
-    """
+    """Save *model* as a PyTorch checkpoint (.pt)."""
     os.makedirs(os.path.dirname(_BEST_MODEL_PT_PATH), exist_ok=True)
-
-    # PyTorch checkpoint — includes layer_sizes so loaders don't need to guess
     torch.save(
         {"state_dict": model.state_dict(), "layer_sizes": model.layer_sizes, "model_type": "mlp"},
         _BEST_MODEL_PT_PATH,
     )
-
-    # Legacy numpy checkpoint — nn.Linear weight is (out, in); Network expects (in, out)
-    linear_layers = [m for m in model.net if isinstance(m, nn.Linear)]
-    arrays: dict  = {}
-    for i, layer in enumerate(linear_layers):
-        arrays[f'W_{i}'] = layer.weight.detach().cpu().numpy().T           # (in, out)
-        arrays[f'b_{i}'] = layer.bias.detach().cpu().numpy().reshape(1, -1)  # (1, out)
-    arrays['n_layers'] = np.array(len(linear_layers))
-    np.savez(_BEST_MODEL_PATH, **arrays)
 
 
 def _read_json(path: str) -> list:
