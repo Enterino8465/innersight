@@ -12,7 +12,7 @@ PREPROCESSOR_FILE = os.path.join(MODEL_DIR, 'preprocessor.npz')   # numpy — co
 BEST_MODEL_FILE   = os.path.join(MODEL_DIR, 'best_model.npz')     # numpy — compat
 BEST_MODEL_PT_FILE  = os.path.join(MODEL_DIR, 'best_model.pt')    # PyTorch checkpoint
 STANDARDIZER_FILE   = os.path.join(MODEL_DIR, 'standardizer.pt')  # PyTorch standardizer
-LDAP_FILE         = os.path.join(DATA_DIR,  'LDAP.csv')
+# LDAP: loaded from DATA_DIR/LDAP/ directory (monthly snapshots). See Phase 1 pipeline.
 
 # ── Default temporal split dates (override via config YAML per version) ───────
 TRAIN_END_DATE = '2010-09-30'

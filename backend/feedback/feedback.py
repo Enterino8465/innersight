@@ -20,7 +20,7 @@ from innersight.backend.config import (
     CORRECTIONS_FILE  as _CORRECTIONS_PATH,
     BLOCK_LOG_FILE    as _BLOCK_LOG_PATH,
     BEST_MODEL_PT_FILE  as _BEST_MODEL_PT_PATH,
-    BEST_MODEL_FILE     as _BEST_MODEL_PATH,    # .npz — kept for load_best_model() compat
+    BEST_MODEL_FILE     as _BEST_MODEL_PATH,    # .npz — legacy numpy checkpoint
     STANDARDIZER_FILE   as _STANDARDIZER_PATH,
     FEATURE_COLS      as _FEATURE_COLS,
     CORRECTION_LR,
@@ -229,7 +229,7 @@ def _save_model(model: InsiderThreatMLP) -> None:
 
     # PyTorch checkpoint — includes layer_sizes so loaders don't need to guess
     torch.save(
-        {"state_dict": model.state_dict(), "layer_sizes": model.layer_sizes},
+        {"state_dict": model.state_dict(), "layer_sizes": model.layer_sizes, "model_type": "mlp"},
         _BEST_MODEL_PT_PATH,
     )
 

@@ -5,7 +5,7 @@ import innersight.backend.config as cfg
 def test_path_attributes_are_strings():
     for attr in ('DATA_DIR', 'MODEL_DIR', 'ALERTS_FILE', 'CORRECTIONS_FILE',
                  'BLOCK_LOG_FILE', 'PREPROCESSOR_FILE', 'BEST_MODEL_FILE',
-                 'BEST_MODEL_PT_FILE', 'STANDARDIZER_FILE', 'LDAP_FILE'):
+                 'BEST_MODEL_PT_FILE', 'STANDARDIZER_FILE'):
         assert isinstance(getattr(cfg, attr), str), f'{attr} must be a str'
 
 

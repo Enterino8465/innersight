@@ -20,7 +20,7 @@ from innersight.backend.training.trainer import train as run_train
 from innersight.backend.scoring.scoring import load_alerts
 from innersight.backend.feedback.feedback import apply_learn, apply_mute, apply_block
 from innersight.backend.config import (
-    DATA_DIR, LDAP_FILE, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
+    DATA_DIR, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
     FEATURE_COLS, DEFAULT_TRAINING_CONFIG, setup_logging,
 )
 from innersight.backend.models.mlp import InsiderThreatMLP, get_device
@@ -44,7 +44,6 @@ _ldap_cache = None           # LDAP DataFrame
 _model_cache = None          # {"model": InsiderThreatMLP, "standardizer": Standardizer, "device": torch.device} or None
 _score_history_cache: dict   = {}   # (user_id, days) -> [{date, score}]
 
-_LDAP_PATH = LDAP_FILE
 _DATA_DIR  = DATA_DIR
 
 
@@ -62,10 +61,13 @@ def _get_data():
 def _get_ldap() -> pd.DataFrame:
     global _ldap_cache
     if _ldap_cache is None:
-        if os.path.exists(_LDAP_PATH):
-            _ldap_cache = pd.read_csv(_LDAP_PATH)
-        else:
-            _ldap_cache = pd.DataFrame(columns=['user_id', 'department'])
+        ldap_dir = os.path.join(_DATA_DIR, 'LDAP')
+        if os.path.isdir(ldap_dir):
+            csvs = sorted([f for f in os.listdir(ldap_dir) if f.endswith('.csv')])
+            if csvs:
+                _ldap_cache = pd.read_csv(os.path.join(ldap_dir, csvs[-1]))
+                return _ldap_cache
+        _ldap_cache = pd.DataFrame(columns=['user_id', 'department'])
     return _ldap_cache
 
 

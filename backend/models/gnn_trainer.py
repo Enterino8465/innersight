@@ -288,7 +288,7 @@ def train_gnn(config: dict, event_callback=None, graphs: dict | None = None) -> 
     torch.save(
         {
             'state_dict':  model.state_dict(),
-            'model_type':  'graphsage',
+            'model_type':  config.get('model', {}).get('type', 'graphsage'),
             'metadata':    train_g.metadata(),
             'config':      config.get('model', {}),
             # Scoring needs to load graphs from this directory to map idx→user_id.
