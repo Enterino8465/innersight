@@ -28,14 +28,6 @@ import pandas as pd
 import torch
 from torch_geometric.data import HeteroData
 
-# Allow running as __main__ from backend/ or the repo root.
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
 from innersight.backend.config import (
     BUSINESS_HOURS_START,
     BUSINESS_HOURS_END,

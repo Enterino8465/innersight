@@ -2,21 +2,10 @@
 
 from __future__ import annotations
 
-import os
-import sys
 from typing import Optional
 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-
-# Allow running as __main__ from repo root or backend/
-# _backend adds "from config import ..." and "from features.features import ..."
-# _pkg_root adds "from innersight.backend.* import ..." used inside pipeline.py
-_backend  = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-_pkg_root = os.path.abspath(os.path.join(_backend, '..', '..'))
-for _p in (_backend, _pkg_root):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
 
 class Standardizer:

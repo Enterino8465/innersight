@@ -2,16 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-import os
-
 import torch
 import torch.nn as nn
-
-# Allow running as __main__ from repo root or backend/
-_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if _root not in sys.path:
-    sys.path.insert(0, _root)
 
 
 def _validate_layer_sizes(layer_sizes: list[int]) -> None:

@@ -14,13 +14,7 @@ import logging
 import os
 import sys
 
-# innersight.backend.* lives two levels above this file: <repo-parent>/innersight/backend/
-# Adding <repo-parent> makes `import innersight.backend.*` resolve correctly.
-_PKG_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-if _PKG_ROOT not in sys.path:
-    sys.path.insert(0, _PKG_ROOT)
-
-import yaml  # noqa: E402
+import yaml
 
 
 def _parse_args() -> argparse.Namespace:

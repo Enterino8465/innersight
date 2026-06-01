@@ -23,14 +23,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-# Allow running as __main__ from backend/ or the repo root.
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
 logger = logging.getLogger(__name__)
 
 from innersight.backend.data.pipeline import load_data
@@ -376,12 +368,6 @@ def _write_alerts_file(alerts: list[dict]) -> None:
 
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
-    import sys
-    # innersight/ lives at Developer/innersight; Developer/ is the pkg root.
-    _pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-    if _pkg_root not in sys.path:
-        sys.path.insert(0, _pkg_root)
-
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
 
     print('=' * 60)

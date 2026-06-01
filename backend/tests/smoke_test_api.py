@@ -19,13 +19,6 @@ import numpy as np
 import pytest
 import torch
 
-# ── sys.path: allow running from repo root or backend/ ───────────────────────
-_backend  = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_pkg_root = os.path.abspath(os.path.join(_backend, "..", ".."))
-for _p in (_backend, _pkg_root):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

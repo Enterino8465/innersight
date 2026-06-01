@@ -21,14 +21,6 @@ import warnings
 
 import torch
 
-# ── Path setup ────────────────────────────────────────────────────────────────
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
 from innersight.backend.models.graph_schema import (
     NODE_USER, NODE_PC, NODE_URL, NODE_FILE,
     EDGE_LOGON, EDGE_USB, EDGE_EMAIL, EDGE_HTTP, EDGE_FILE_COPY,

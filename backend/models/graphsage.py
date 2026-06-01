@@ -22,21 +22,12 @@ Edge cases handled
 from __future__ import annotations
 
 import os
-import sys
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv, HeteroConv
 from torch_geometric.nn import Linear
-
-# Allow running as __main__ from backend/ or the repo root.
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
 from innersight.backend.models.graph_schema import NODE_FEATURE_DIMS
 

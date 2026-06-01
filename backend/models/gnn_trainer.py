@@ -37,19 +37,11 @@ from __future__ import annotations
 import copy
 import logging
 import os
-import sys
 from typing import Any, Callable
 
 import numpy as np
 import torch
 import torch.nn as nn
-
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
 from innersight.backend.models.graph_builder import load_temporal_graphs
 from innersight.backend.models.graph_loader import build_graph_dataloaders

@@ -1,5 +1,4 @@
 import json
-import os
 import uuid
 import pytest
 
@@ -27,9 +26,7 @@ def seed_alerts(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def client():
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    import api as api_mod
+    from innersight.backend import api as api_mod
     api_mod.app.config['TESTING'] = True
     with api_mod.app.test_client() as c:
         yield c

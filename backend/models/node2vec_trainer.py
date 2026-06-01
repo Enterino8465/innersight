@@ -10,19 +10,11 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import time
 
 import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import Node2Vec
-
-_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
-_BACKEND  = os.path.abspath(os.path.join(_FILE_DIR, '..'))
-_PKG_ROOT = os.path.abspath(os.path.join(_BACKEND, '..', '..'))
-for _p in (_PKG_ROOT, _BACKEND):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
 logger = logging.getLogger(__name__)
 
