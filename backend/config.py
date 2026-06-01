@@ -39,6 +39,41 @@ FEATURE_COLS = [
     'http_request_count', 'job_search_visits', 'cloud_upload_visits',
 ]
 
+# ── CERT Version Families ────────────────────────────────────────────────────
+# Maps user-facing version string to its adapter family.
+VERSION_FAMILIES: dict[str, str] = {
+    'r1':   'r1',
+    'r2':   'r2',
+    'r3.1': 'r3x', 'r3.2': 'r3x',
+    'r4.1': 'r4x', 'r4.2': 'r4x',
+    'r5.1': 'r5x', 'r5.2': 'r5x',
+    'r6.1': 'r6x', 'r6.2': 'r6x',
+}
+
+# ── Job search keywords (from CERT readme + actual URLs in r4.2) ─────────────
+# Overrides the incomplete JOB_KEYWORDS above for the universal pipeline.
+# Keep old JOB_KEYWORDS for backward compat; new code should use CERT_JOB_DOMAINS.
+CERT_JOB_DOMAINS: tuple[str, ...] = (
+    'monster.com', 'careerbuilder.com', 'craigslist.org',
+    'jobhuntersbible.com', 'aol.com/jobs',
+    'job', 'career', 'linkedin', 'indeed',
+)
+
+CERT_CLOUD_DOMAINS: tuple[str, ...] = (
+    'wikileaks.org', 'dropbox',
+)
+
+CERT_KEYLOGGER_DOMAINS: tuple[str, ...] = (
+    'refog.com', 'softactivity.com', 'keylogger',
+)
+
+# ── Chunked reading ──────────────────────────────────────────────────────────
+CSV_CHUNK_SIZE: int = 50_000  # rows per chunk for streaming large CSVs (r6.2 http = 85M rows)
+
+# ── Date range ───────────────────────────────────────────────────────────────
+CERT_DATE_START = '2010-01-01'
+CERT_DATE_END   = '2011-06-01'
+
 # ── Training ──────────────────────────────────────────────────────────────────
 DEFAULT_TRAINING_CONFIG = {
     'epochs':      50,
