@@ -239,16 +239,22 @@ _FAMILY_ADAPTERS: dict[str, type[_BaseAdapter]] = {
 
 
 def get_adapter(version: str) -> CertAdapter:
-    """Return the adapter instance for a CERT version string (e.g. 'r4.2').
+    """Return the adapter instance for a CERT version or family string.
+
+    Accepts either a concrete version (e.g. 'r4.2') or a family string
+    (e.g. 'r4x', as returned by auto_detect_version), so the auto-detect →
+    adapter chain works without an intermediate version lookup.
 
     Raises:
-        ValueError: If the version is not a known CERT version.
+        ValueError: If the string is neither a known version nor a known family.
     """
-    family = VERSION_FAMILIES.get(version)
+    # A concrete version maps through VERSION_FAMILIES; a family is already a key.
+    family = VERSION_FAMILIES.get(version, version if version in _FAMILY_ADAPTERS else None)
     if family is None:
         raise ValueError(
             f"Unknown CERT version: {version!r}. "
-            f"Valid versions: {sorted(VERSION_FAMILIES.keys())}"
+            f"Valid versions: {sorted(VERSION_FAMILIES.keys())}; "
+            f"valid families: {sorted(_FAMILY_ADAPTERS.keys())}"
         )
     return _FAMILY_ADAPTERS[family]()
 
