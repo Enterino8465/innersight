@@ -8,8 +8,8 @@ flask-cors==6.0.2
 pytest==9.0.3
 # PyTorch Geometric — optional deps installed from PyG wheel server (CPU build)
 # pip install pyg_lib torch_scatter torch_sparse -f https://data.pyg.org/whl/torch-2.11.0+cpu.html
-torch-geometric
-pyyaml
-matplotlib
-networkx
-umap-learn
+torch-geometric==2.7.0
+pyyaml==6.0.3
+matplotlib==3.10.9
+networkx==3.6.1
+umap-learn==0.5.12

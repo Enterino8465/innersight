@@ -9,7 +9,7 @@ def test_path_attributes_are_strings():
 
 
 def test_default_training_config_keys():
-    required = {'epochs', 'batch_size', 'lr', 'layer_sizes', 'pos_weight', 'patience'}
+    required = {'epochs', 'batch_size', 'lr', 'layer_sizes', 'pos_weight', 'patience', 'seed'}
     assert required == set(cfg.DEFAULT_TRAINING_CONFIG.keys())
 
 

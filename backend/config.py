@@ -47,6 +47,7 @@ DEFAULT_TRAINING_CONFIG = {
     'layer_sizes': [18, 64, 32, 1],
     'pos_weight':  50.0,
     'patience':    5,
+    'seed':        42,
 }
 
 CORRECTION_LR = 0.0001
