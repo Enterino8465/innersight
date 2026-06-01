@@ -34,3 +34,12 @@ node_modules/
 
 # NumPy checkpoint artifacts (legacy format — use .pt checkpoints instead)
 *.npz
+
+# Model checkpoints (distributed via GitHub Releases)
+*.pt
+*.pth
+*.onnx
+
+# Large data artifacts
+*.parquet
+*.feather
