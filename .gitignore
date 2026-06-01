@@ -12,6 +12,8 @@ build/
 
 # Data & ML artifacts (too large for git)
 data/
+# ...but backend/data/ is the source package, not a data artifact — keep it tracked.
+!backend/data/
 ml/experiments/
 ml/models/
 
