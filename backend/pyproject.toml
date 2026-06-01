@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "innersight"
+version = "0.1.0"
+description = "InnerSight UEBA - Insider Threat Detection"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "torch>=2.0",
+    "pandas>=2.0",
+    "scikit-learn>=1.5",
+    "flask>=3.0",
+    "flask-cors>=5.0",
+    "pyyaml",
+    "matplotlib",
+    "networkx",
+    "torch-geometric",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
+
+[tool.setuptools.packages.find]
+# The `innersight` package is the repo root dir, whose parent is two levels
+# up from this file (backend/pyproject.toml -> backend -> innersight -> Developer).
+where = ["../.."]
+include = ["innersight*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["../.."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
