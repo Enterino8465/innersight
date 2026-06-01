@@ -1,0 +1,17 @@
+# Effective ignore file for the backend image, whose build context is the repo
+# root (docker build -f backend/Dockerfile .). Keeps the venv, caches, large
+# model checkpoints, frontend node_modules, and VCS metadata out of the image.
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pt
+**/*.pth
+**/.pytest_cache/
+.git/
+.github/
+docs/
+backend/learning/
+backend/outputs/
+backend/logs/
+frontend/node_modules/
+frontend/dist/
