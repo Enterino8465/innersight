@@ -14,12 +14,43 @@ Public API:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# insiders.csv 'dataset' values look like "4.2"; version/family inputs look like
+# "r4.2" or "r4x". We match on the leading major-version digit because
+# auto-detection yields only a family (e.g. 'r4x') and cannot distinguish r4.1
+# from r4.2 (their schemas are identical). Each version's answers/ dir contains
+# only that version's rows, so major-version matching is unambiguous in practice.
+_MAJOR_VERSION_RE = re.compile(r'r?(\d+)', re.IGNORECASE)
+
+
+def _major_version(version: str) -> str:
+    """Extract the major-version digit from a version or family string.
+
+    'r4.2' -> '4', 'r4x' -> '4', '5.2' -> '5'.
+
+    Raises:
+        ValueError: If no leading version number can be found.
+    """
+    match = _MAJOR_VERSION_RE.match(version.strip())
+    if match is None:
+        raise ValueError(
+            f"Cannot extract a major version from {version!r}; "
+            "expected a string like 'r4.2', 'r4x', or '5.2'."
+        )
+    return match.group(1)
+
+
+def _row_major_version(value: object) -> str | None:
+    """Major-version digit of an insiders.csv 'dataset' cell, or None if absent."""
+    match = _MAJOR_VERSION_RE.match(str(value).strip())
+    return match.group(1) if match is not None else None
 
 
 @dataclass(frozen=True)
@@ -72,12 +103,11 @@ def load_insiders(answers_dir: Path, version: str) -> list[InsiderRecord]:
             f"Found: {sorted(df.columns.tolist())}"
         )
 
-    # Filter to requested version — strip "r" prefix for matching
-    version_num = version.lstrip('r')
-    # dataset column contains values like "4.2", "5.2" etc.
-    # Convert both sides to string for robust matching
+    # Filter to the requested version by MAJOR version, so both concrete
+    # versions ('r4.2') and auto-detected families ('r4x') select the right rows.
+    target_major = _major_version(version)
     df['dataset'] = df['dataset'].astype(str).str.strip()
-    version_rows = df[df['dataset'] == version_num]
+    version_rows = df[df['dataset'].map(_row_major_version) == target_major]
 
     records = []
     for _, row in version_rows.iterrows():
