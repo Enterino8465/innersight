@@ -138,6 +138,20 @@ class _BaseAdapter:
             return _empty_frame(FILE_SCHEMA)
         return self._finalize(load_csv(path), FILE_SCHEMA, path)
 
+    def _load_file_implicit_removable(self, data_dir: Path) -> pd.DataFrame:
+        """Load a file.csv where every row is an (implicit) removable-media copy.
+
+        r3.x and r4.x file logs have no to_removable_media column, but DATASET_CONTEXT
+        §5.6 states every row IS a copy to removable media. Tag them 'True' so the
+        file_to_removable_count feature is computed correctly (and uniformly with r5+).
+        """
+        path = data_dir / _FILE_CSV
+        if not path.exists():
+            return _empty_frame(FILE_SCHEMA)
+        df = load_csv(path)
+        df['to_removable_media'] = _REMOVABLE_MEDIA_TRUE
+        return self._finalize(df, FILE_SCHEMA, path)
+
     def load_ldap(self, data_dir: Path) -> pd.DataFrame:
         return load_ldap_directory(data_dir / _LDAP_DIR)
 
@@ -190,21 +204,20 @@ class R2Adapter(_BaseAdapter):
 class R3xAdapter(_BaseAdapter):
     """r3.x: 7-column email (id,date,to,from,size,attachments,content), no user/pc/cc/bcc.
 
-    Base load_email already fills the absent user/pc/cc/bcc with None; 'user' is
-    inferred downstream from the 'from' address via LDAP. No override needed.
+    Base load_email fills the absent user/pc/cc/bcc with None; 'user' is inferred
+    downstream from the 'from' address via LDAP. Like r4.x, every file.csv row is
+    an implicit removable-media copy (DATASET_CONTEXT §5.6).
     """
+
+    def load_file(self, data_dir: Path) -> pd.DataFrame:
+        return self._load_file_implicit_removable(data_dir)
 
 
 class R4xAdapter(_BaseAdapter):
     """r4.x: primary training version. Every file.csv row is a removable-media copy."""
 
     def load_file(self, data_dir: Path) -> pd.DataFrame:
-        path = data_dir / _FILE_CSV
-        if not path.exists():
-            return _empty_frame(FILE_SCHEMA)
-        df = load_csv(path)
-        df['to_removable_media'] = _REMOVABLE_MEDIA_TRUE
-        return self._finalize(df, FILE_SCHEMA, path)
+        return self._load_file_implicit_removable(data_dir)
 
 
 class R5xAdapter(_BaseAdapter):
