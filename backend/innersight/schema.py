@@ -216,3 +216,59 @@ def validate_dataframe(
             "validate_dataframe | %s from %r: optional columns absent: %s",
             schema.name, source, sorted(absent_optional),
         )
+
+
+# ── Module 1 output contract: the deviation vector ───────────────────────────
+@dataclass(frozen=True)
+class DeviationVector:
+    """Contract for Module 1's z-scored output, one value per feature.
+
+    Each component is the deviation of a user's day from their EMA baseline,
+    expressed in baseline standard deviations (a z-score). For a normal day the
+    values cluster around ``expected_normal_mean`` (~0); during an insider attack
+    the implicated features should exceed ``attack_signal_threshold``.
+
+    Attributes:
+        columns: The 18 FEATURE_NAMES, in canonical order (the vector layout).
+        expected_normal_mean: Approximate mean of each component on normal days.
+        attack_signal_threshold: Z-score an insider's day is expected to exceed
+            on the implicated features during an attack.
+    """
+    columns: tuple[str, ...] = tuple(FEATURE_NAMES)
+    expected_normal_mean: float = 0.0
+    attack_signal_threshold: float = 2.0
+
+    @property
+    def num_features(self) -> int:
+        return len(self.columns)
+
+
+# Canonical singleton describing the deviation-vector layout.
+DEVIATION_VECTOR = DeviationVector()
+
+
+# ── Sliding-window label contract ────────────────────────────────────────────
+@dataclass(frozen=True)
+class WindowLabel:
+    """Label for one sliding window of a user's activity.
+
+    Windows are fixed-length spans of days (see DEFAULT_WINDOW_CONFIG). A window
+    is labelled by how much it overlaps a known attack period: ``label`` is 1
+    (positive) when overlap meets the positive threshold, 0 (negative) when there
+    is no overlap, and -1 (excluded) for ambiguous partial overlap that should be
+    kept out of training.
+
+    Attributes:
+        user_id: The user this window belongs to.
+        window_start: Inclusive first day of the window.
+        window_end: Inclusive last day of the window.
+        label: 1 = positive, 0 = negative, -1 = excluded.
+        overlap_ratio: Fraction of the window overlapping an attack (0.0–1.0).
+        scenario: CERT insider scenario number; 0 for benign windows.
+    """
+    user_id: str
+    window_start: pd.Timestamp
+    window_end: pd.Timestamp
+    label: int
+    overlap_ratio: float
+    scenario: int = 0

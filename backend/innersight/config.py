@@ -87,6 +87,27 @@ DEFAULT_TRAINING_CONFIG = {
 
 CORRECTION_LR = 0.0001
 
+# ── Per-user baseline (Module 1) ──────────────────────────────────────────────
+# EMA-smoothed baseline of each user's normal daily behaviour. The deviation of
+# a day from this baseline (z-score) is the model input for Module 1.
+DEFAULT_BASELINE_CONFIG = {
+    'ema_alpha':        0.05,   # EMA smoothing factor; half-life ≈ 13.5 days
+    'min_history_days': 14,     # days of history before the baseline is reliable
+    'std_floor_ratio':  0.1,    # std floor = this × global median std per feature
+    'variance_eps':     1e-6,   # prevent division by zero in EMA variance
+}
+
+# ── Sliding windows (Module 1 training labels) ────────────────────────────────
+# Days are grouped into overlapping fixed-length windows; each window is labelled
+# by how much it overlaps a known attack period.
+DEFAULT_WINDOW_CONFIG = {
+    'window_size':                28,    # days per sliding window
+    'window_stride':              7,     # slide by this many days
+    'overlap_positive_threshold': 0.5,   # window is positive if ≥50% overlaps an attack
+    # Windows with 1–49% overlap are EXCLUDED from training (ambiguous);
+    # windows with 0% overlap are negative.
+}
+
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 def setup_logging(level: int = logging.INFO) -> None:
