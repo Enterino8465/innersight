@@ -8,7 +8,6 @@ Public API:
 """
 
 from __future__ import annotations
-
 import logging
 from typing import Any
 
@@ -93,10 +92,13 @@ def _file_features(file_df: pd.DataFrame) -> pd.DataFrame:
             'user', '_day', 'file_count', 'file_to_removable_count', 'unique_filenames',
         ])
     df = _add_day(file_df)
-    # 'to_removable_media' may be bool or 'True'/'False' string
+    # 'to_removable_media' may be a real bool (r5/r6) or a 'True'/'False' string
+    # (r3/r4 adapters tag it). Normalise anything non-boolean via string compare —
+    # pandas 3.0 reads string columns as the 'str' dtype, not 'object', so a bare
+    # `dtype == object` check silently misses them (summing strings concatenates).
     removable = df.get('to_removable_media', pd.Series(False, index=df.index))
-    if removable.dtype == object:
-        removable = removable.str.lower() == 'true'
+    if not pd.api.types.is_bool_dtype(removable):
+        removable = removable.astype(str).str.strip().str.lower() == 'true'
     df['_removable'] = removable.fillna(False)
 
     g = df.groupby(['user', '_day'])
@@ -190,13 +192,17 @@ def build_user_day_features(
     int_cols = [c for c in merged.columns if c not in ('user', '_day', 'total_email_size')]
     merged[int_cols] = merged[int_cols].astype(int)
 
-    # Label
-    merged['date'] = merged['_day'].dt.date
-    merged['is_malicious'] = merged.apply(
-        lambda r: int((r['user'], r['date']) in malicious_tuples), axis=1
-    )
+    # Label on the normalized day. get_malicious_dates() keys on python date,
+    # so compare against _day.dt.date.
+    day_dates = merged['_day'].dt.date
+    merged['is_malicious'] = [
+        int((user, day) in malicious_tuples)
+        for user, day in zip(merged['user'], day_dates)
+    ]
 
-    # Final column order
+    # Canonical 'date' column is the normalized day. Rename _day -> date (a single
+    # column); a previous version also added a separate date column, producing a
+    # duplicate that broke Parquet serialization and str(row['date']) in scoring.
     merged = merged.rename(columns={'_day': 'date'})
     feature_cols = [
         'user', 'date',

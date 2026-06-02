@@ -17,8 +17,10 @@ Public API (backward-compatible wrappers — existing callers still work):
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +36,29 @@ from innersight.backend.data.answers import (
 
 logger = logging.getLogger(__name__)
 
+# Only the first 64KB of each CSV is hashed — a fast fingerprint that detects
+# header/schema changes and most edits without reading multi-GB files in full.
+_HASH_PREFIX_BYTES = 64 * 1024
+
+
+def _hash_file_prefix(path: Path, num_bytes: int = _HASH_PREFIX_BYTES) -> str:
+    """Return the SHA-256 hex digest of the first num_bytes of a file."""
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        digest.update(handle.read(num_bytes))
+    return digest.hexdigest()
+
+
+def _compute_file_hashes(data_dir: Path) -> dict[str, str]:
+    """Fingerprint every top-level CSV in data_dir (filename → 64KB SHA-256)."""
+    hashes: dict[str, str] = {}
+    for csv_path in sorted(data_dir.glob('*.csv')):
+        try:
+            hashes[csv_path.name] = _hash_file_prefix(csv_path)
+        except OSError as exc:
+            logger.warning("_compute_file_hashes | could not hash %s: %s", csv_path, exc)
+    return hashes
+
 
 @dataclass
 class CertDataset:
@@ -48,6 +73,8 @@ class CertDataset:
         ldap: LDAP employee directory DataFrame.
         psychometric: OCEAN personality scores DataFrame.
         decoy_files: Decoy file registry DataFrame (r5+ only).
+        provenance: Manifest of this load (version, timestamps, row counts,
+            per-CSV content hashes) for reproducibility and cache validation.
     """
     version: str
     data_dir: Path
@@ -57,6 +84,7 @@ class CertDataset:
     ldap: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
     psychometric: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
     decoy_files: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
+    provenance: dict[str, Any] = field(default_factory=dict)
 
 
 def load_version(data_dir: str | Path, version: str | None = None) -> CertDataset:
@@ -113,6 +141,18 @@ def load_version(data_dir: str | Path, version: str | None = None) -> CertDatase
         version, row_counts, len(insiders), len(ldap),
     )
 
+    provenance: dict[str, Any] = {
+        'version': version,
+        'adapter': type(adapter).__name__,
+        'data_dir': str(data_path),
+        'loaded_at': datetime.now(timezone.utc).isoformat(),
+        'row_counts': row_counts,
+        'insider_count': len(insiders),
+        'ldap_count': len(ldap),
+        'psychometric_count': len(psychometric),
+        'file_hashes': _compute_file_hashes(data_path),
+    }
+
     return CertDataset(
         version=version,
         data_dir=data_path,
@@ -122,6 +162,7 @@ def load_version(data_dir: str | Path, version: str | None = None) -> CertDatase
         ldap=ldap,
         psychometric=psychometric,
         decoy_files=decoy_files,
+        provenance=provenance,
     )
 
 
