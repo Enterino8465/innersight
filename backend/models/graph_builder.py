@@ -1600,7 +1600,7 @@ def _graphs_dir() -> str:
     Reads INNERSIGHT_MODEL_DIR at call time so the env var can be set after
     module import (e.g. in __main__ before calling build_temporal_graphs).
     """
-    model_dir = os.environ.get('INNERSIGHT_MODEL_DIR', 'innersight/data')
+    model_dir = os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints')
     return os.path.join(model_dir, 'graphs')
 
 

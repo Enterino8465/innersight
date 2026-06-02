@@ -1,0 +1,20 @@
+[
+  {
+    "alert_id": "37332323-d253-4c7c-b002-162a8f0ab9dc",
+    "user": "u2",
+    "timestamp": "2026-05-02T22:23:45.289858+00:00",
+    "message": "Access revocation request sent for user u2. (Simulation only \u2014 no real action taken.)"
+  },
+  {
+    "alert_id": "94f0943a-c5cb-4e03-914a-f56d90dde551",
+    "user": "u0",
+    "timestamp": "2026-05-11T12:29:33.227758+00:00",
+    "message": "Access revocation request sent for user u0. (Simulation only \u2014 no real action taken.)"
+  },
+  {
+    "alert_id": "c1bad223-1272-46b9-8007-d3454834fe62",
+    "user": "u0",
+    "timestamp": "2026-05-11T12:29:49.990215+00:00",
+    "message": "Access revocation request sent for user u0. (Simulation only \u2014 no real action taken.)"
+  }
+]

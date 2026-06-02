@@ -10,7 +10,7 @@ import os
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_DIR  = os.environ.get('INNERSIGHT_DATA_DIR',   '')
-MODEL_DIR = os.environ.get('INNERSIGHT_MODEL_DIR',  'innersight/data')
+MODEL_DIR = os.environ.get('INNERSIGHT_MODEL_DIR',  'checkpoints')
 
 ALERTS_FILE       = os.path.join(MODEL_DIR, 'alerts.json')
 CORRECTIONS_FILE  = os.path.join(MODEL_DIR, 'corrections.json')
