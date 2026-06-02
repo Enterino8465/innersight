@@ -14,10 +14,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from innersight.backend.data.answers import get_malicious_dates
-from innersight.backend.data.feature_store import FeatureStore
-from innersight.backend.data.pipeline import load_version, time_split
-from innersight.backend.features.features import build_user_day_features
+from innersight.data.answers import get_malicious_dates
+from innersight.data.feature_store import FeatureStore
+from innersight.data.pipeline import load_version, time_split
+from innersight.features.features import build_user_day_features
 
 INSIDER = 'AAF0535'
 NORMALS = ('NORM0001', 'NORM0002')

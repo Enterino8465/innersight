@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from innersight.backend.data.adapters import (
+from innersight.data.adapters import (
     R1Adapter,
     R4xAdapter,
     auto_detect_version,

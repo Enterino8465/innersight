@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from innersight.backend.data.pipeline import CertDataset, load_version, time_split
+from innersight.data.pipeline import CertDataset, load_version, time_split
 
 
 @pytest.fixture()

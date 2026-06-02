@@ -12,7 +12,7 @@ pytestmark = pytest.mark.skipif(
     reason='pyg-lib or torch-cluster required for Node2Vec (node2vec tests)',
 )
 
-from innersight.backend.models.node2vec_trainer import (
+from innersight.models.node2vec_trainer import (
     _hetero_to_homo,
     train_node2vec,
     save_embeddings,

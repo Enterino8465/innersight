@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import torch
-from innersight.backend.models.dataset import Standardizer, build_features_tensor, build_dataloaders
-from innersight.backend.config import FEATURE_COLS
+from innersight.models.dataset import Standardizer, build_features_tensor, build_dataloaders
+from innersight.config import FEATURE_COLS
 
 N_FEAT = len(FEATURE_COLS)
 
@@ -136,7 +136,7 @@ def test_build_features_tensor_malicious_label():
 def test_build_dataloaders_with_embeddings():
     """Passing an active EmbeddingManager doubles the feature width per batch."""
     from torch.utils.data import TensorDataset, DataLoader
-    from innersight.backend.models.embeddings import EmbeddingManager
+    from innersight.models.embeddings import EmbeddingManager
 
     EMB_DIM = 32
     USERS   = ['u1', 'u2', 'u3']

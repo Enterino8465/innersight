@@ -1,5 +1,5 @@
 import logging
-import innersight.backend.config as cfg
+import innersight.config as cfg
 
 
 def test_path_attributes_are_strings():

@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
     reason='pyg-lib or torch-sparse required for NeighborLoader (GNN tests)',
 )
 
-from innersight.backend.models.gnn_trainer import train_gnn
+from innersight.models.gnn_trainer import train_gnn
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ def test_train_gnn_class_imbalance_ratio(tmp_path, small_hetero_graph):
 
 def test_train_gnn_checkpoint_loadable(tmp_path, small_hetero_graph):
     """Saved checkpoint can be re-loaded as a valid InsiderThreatGNN."""
-    from innersight.backend.models.graphsage import InsiderThreatGNN
+    from innersight.models.graphsage import InsiderThreatGNN
 
     model_path = str(tmp_path / 'gnn.pt')
     config     = _minimal_config(model_path)

@@ -4,9 +4,9 @@ import pytest
 import torch
 from torch_geometric.data import HeteroData
 
-from innersight.backend.models.graphsage import HeteroGraphSAGE, InsiderThreatGNN
-from innersight.backend.models.factory import build_model
-from innersight.backend.models.mlp import InsiderThreatMLP
+from innersight.models.graphsage import HeteroGraphSAGE, InsiderThreatGNN
+from innersight.models.factory import build_model
+from innersight.models.mlp import InsiderThreatMLP
 
 
 # ── HeteroGraphSAGE ───────────────────────────────────────────────────────────

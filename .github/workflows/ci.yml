@@ -17,9 +17,9 @@ jobs:
       - name: Install ruff
         run: pip install ruff
       - name: Check
-        run: ruff check backend/ --exclude backend/learning/
+        run: ruff check backend/
       - name: Format
-        run: ruff format --check backend/ --exclude backend/learning/
+        run: ruff format --check backend/
 
   test:
     name: Test

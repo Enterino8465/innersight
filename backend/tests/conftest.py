@@ -32,7 +32,7 @@ def logon_csv(tmp_path):
 @pytest.fixture()
 def small_mlp():
     """Tiny InsiderThreatMLP for fast tests."""
-    from innersight.backend.models.mlp import InsiderThreatMLP
+    from innersight.models.mlp import InsiderThreatMLP
     return InsiderThreatMLP([18, 8, 1])
 
 
@@ -43,8 +43,8 @@ def tmp_model_checkpoint(tmp_path):
     Returns a dict with 'pt_path', 'std_path' so tests can patch
     module-level path constants.
     """
-    from innersight.backend.models.mlp import InsiderThreatMLP
-    from innersight.backend.models.dataset import Standardizer
+    from innersight.models.mlp import InsiderThreatMLP
+    from innersight.models.dataset import Standardizer
 
     layer_sizes = [18, 8, 1]
     model = InsiderThreatMLP(layer_sizes)
@@ -65,7 +65,7 @@ def tmp_model_checkpoint(tmp_path):
 @pytest.fixture()
 def synthetic_loaders():
     """Lightweight DataLoaders + Standardizer suitable for train() smoke tests."""
-    from innersight.backend.models.dataset import Standardizer
+    from innersight.models.dataset import Standardizer
 
     N_FEAT = 18
     gen    = torch.Generator().manual_seed(0)

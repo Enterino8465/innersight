@@ -23,10 +23,10 @@ import torch
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _write_fake_checkpoints(tmp_dir: str, layer_sizes: list[int] | None = None) -> None:
-    from innersight.backend.models.mlp import InsiderThreatMLP
-    from innersight.backend.models.dataset import Standardizer
+    from innersight.models.mlp import InsiderThreatMLP
+    from innersight.models.dataset import Standardizer
     if layer_sizes is None:
-        from innersight.backend.config import DEFAULT_TRAINING_CONFIG
+        from innersight.config import DEFAULT_TRAINING_CONFIG
         layer_sizes = DEFAULT_TRAINING_CONFIG["layer_sizes"]
     model = InsiderThreatMLP(layer_sizes)
     torch.save(
@@ -57,8 +57,8 @@ def _write_fake_alerts(tmp_dir: str) -> None:
 
 def _patch_api(tmp_dir: str) -> None:
     """Redirect all file-path constants in api and scoring modules to tmp_dir."""
-    import innersight.backend.api as api_mod
-    import innersight.backend.scoring.scoring as scoring_mod
+    import innersight.api as api_mod
+    import innersight.scoring.scoring as scoring_mod
     api_mod._BEST_MODEL_PT_PATH       = os.path.join(tmp_dir, "model.pt")
     api_mod._STANDARDIZER_PATH        = os.path.join(tmp_dir, "std.pt")
     api_mod._model_cache              = None
@@ -114,7 +114,7 @@ def _clear_event_queue(api_mod) -> None:
 @pytest.fixture()
 def smoke_setup(tmp_path):
     """Yields (client, tmp_dir) with paths patched and fake data written."""
-    import innersight.backend.api as api_mod
+    import innersight.api as api_mod
 
     tmp_dir = str(tmp_path)
     _write_fake_checkpoints(tmp_dir)
@@ -172,7 +172,7 @@ def test_train_invalid_config(smoke_setup):
 
 def test_train_starts_and_completes(tmp_path):
     """POST /api/train → async → drain SSE → confirm done event received."""
-    import innersight.backend.api as api_mod
+    import innersight.api as api_mod
 
     tmp_dir = str(tmp_path)
     _write_fake_checkpoints(tmp_dir)
@@ -219,7 +219,7 @@ def _run_standalone() -> bool:
     print("=" * 50)
 
     with tempfile.TemporaryDirectory() as d:
-        import innersight.backend.api as api_mod
+        import innersight.api as api_mod
 
         _write_fake_checkpoints(d)
         _write_fake_alerts(d)

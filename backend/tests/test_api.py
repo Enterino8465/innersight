@@ -2,14 +2,14 @@ import json
 import uuid
 import pytest
 
-from innersight.backend.config import ALERTS_FILE, DEFAULT_TRAINING_CONFIG
+from innersight.config import ALERTS_FILE, DEFAULT_TRAINING_CONFIG
 
 
 @pytest.fixture(autouse=True)
 def seed_alerts(tmp_path, monkeypatch):
     """Point ALERTS_FILE at a tmp copy so tests don't touch real data."""
-    import innersight.backend.scoring.scoring as sc
-    import innersight.backend.feedback.feedback as fb
+    import innersight.scoring.scoring as sc
+    import innersight.feedback.feedback as fb
 
     alerts_path = str(tmp_path / 'alerts.json')
     sample = [
@@ -26,7 +26,7 @@ def seed_alerts(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def client():
-    from innersight.backend import api as api_mod
+    from innersight import api as api_mod
     api_mod.app.config['TESTING'] = True
     with api_mod.app.test_client() as c:
         yield c
@@ -87,7 +87,7 @@ def test_alerts_status_filter(client):
 
 def test_alerts_sorted_by_score_desc(client, seed_alerts):
     # Add a second alert with lower score
-    import innersight.backend.scoring.scoring as sc
+    import innersight.scoring.scoring as sc
     alerts = sc._read_alerts_file()
     alerts.append({'id': str(uuid.uuid4()), 'user': 'u2', 'date': '2011-03-16',
                    'score': 0.5, 'status': 'open', 'created_at': '', 'top_features': []})
@@ -111,7 +111,7 @@ def test_alert_block_unknown_id_returns_404(client):
 
 
 def test_alert_mute_known_id_returns_200(client, seed_alerts):
-    import innersight.backend.scoring.scoring as sc
+    import innersight.scoring.scoring as sc
     alert_id = sc._read_alerts_file()[0]['id']
     r = client.post(f'/api/alert/{alert_id}/mute')
     assert r.status_code == 200

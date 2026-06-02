@@ -1,14 +1,14 @@
 import os
 import pytest
 import torch
-from innersight.backend.training.trainer import train
+from innersight.training.trainer import train
 
 
 # ── smoke test ────────────────────────────────────────────────────────────────
 
 def test_train_smoke(tmp_path, monkeypatch, synthetic_loaders):
     """train() completes for 2 epochs on synthetic data, emits events, saves checkpoints."""
-    import innersight.backend.training.trainer as trainer_mod
+    import innersight.training.trainer as trainer_mod
 
     # Redirect all file I/O to tmp_path
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
@@ -47,7 +47,7 @@ def test_train_smoke(tmp_path, monkeypatch, synthetic_loaders):
 
 def test_train_class_imbalance_event(tmp_path, monkeypatch, synthetic_loaders):
     """The first event emitted must contain class_imbalance info."""
-    import innersight.backend.training.trainer as trainer_mod
+    import innersight.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
 
@@ -68,7 +68,7 @@ def test_train_class_imbalance_event(tmp_path, monkeypatch, synthetic_loaders):
 
 def test_train_epoch_events_match_config(tmp_path, monkeypatch, synthetic_loaders):
     """Epoch field in val events should not exceed the configured epochs."""
-    import innersight.backend.training.trainer as trainer_mod
+    import innersight.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
 
@@ -90,8 +90,8 @@ def test_train_epoch_events_match_config(tmp_path, monkeypatch, synthetic_loader
 
 def test_train_checkpoint_is_loadable(tmp_path, monkeypatch, synthetic_loaders):
     """Saved .pt checkpoint must be loadable as a valid state dict."""
-    import innersight.backend.training.trainer as trainer_mod
-    from innersight.backend.models.mlp import InsiderThreatMLP
+    import innersight.training.trainer as trainer_mod
+    from innersight.models.mlp import InsiderThreatMLP
 
     pt_path = str(tmp_path / 'model.pt')
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', pt_path)
@@ -113,7 +113,7 @@ def test_train_checkpoint_is_loadable(tmp_path, monkeypatch, synthetic_loaders):
 
 def test_train_early_stopping(tmp_path, monkeypatch, synthetic_loaders):
     """With patience=1 and many epochs, training stops before reaching max epochs."""
-    import innersight.backend.training.trainer as trainer_mod
+    import innersight.training.trainer as trainer_mod
 
     monkeypatch.setattr(trainer_mod, '_BEST_MODEL_PT_PATH', str(tmp_path / 'model.pt'))
 

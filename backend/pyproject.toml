@@ -25,14 +25,13 @@ dependencies = [
 dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
 
 [tool.setuptools.packages.find]
-# The `innersight` package is the repo root dir, whose parent is two levels
-# up from this file (backend/pyproject.toml -> backend -> innersight -> Developer).
-where = ["../.."]
+# The `innersight` package lives alongside this file at backend/innersight/.
+where = ["."]
 include = ["innersight*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["../.."]
+pythonpath = ["."]
 addopts = "-m \"not slow\""
 markers = [
     "slow: end-to-end / integration tests that train a real model (skip with -m \"not slow\")",

@@ -1,6 +1,6 @@
 import pytest
 import torch
-from innersight.backend.models.mlp import InsiderThreatMLP, build_mlp, get_device
+from innersight.models.mlp import InsiderThreatMLP, build_mlp, get_device
 
 
 LAYER_SIZES = [18, 64, 32, 1]
@@ -114,14 +114,14 @@ def test_get_device_returns_torch_device():
 
 
 def test_build_mlp_returns_model_and_device():
-    from innersight.backend.config import DEFAULT_TRAINING_CONFIG
+    from innersight.config import DEFAULT_TRAINING_CONFIG
     model, device = build_mlp(DEFAULT_TRAINING_CONFIG)
     assert isinstance(model, InsiderThreatMLP)
     assert isinstance(device, torch.device)
 
 
 def test_build_mlp_model_on_correct_device():
-    from innersight.backend.config import DEFAULT_TRAINING_CONFIG
+    from innersight.config import DEFAULT_TRAINING_CONFIG
     model, device = build_mlp(DEFAULT_TRAINING_CONFIG)
     param_device = next(model.parameters()).device
     assert param_device.type == device.type

@@ -1,7 +1,7 @@
 """Tests for reproducibility utilities."""
 
 import torch
-from innersight.backend.utils.reproducibility import seed_everything
+from innersight.utils.reproducibility import seed_everything
 
 
 def test_seed_produces_identical_tensors() -> None:

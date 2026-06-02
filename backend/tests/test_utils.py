@@ -1,7 +1,7 @@
 import json
 import os
 import pytest
-from innersight.backend.utils import safe_json_read, safe_json_write
+from innersight.utils import safe_json_read, safe_json_write
 
 
 def test_write_creates_file(tmp_path):

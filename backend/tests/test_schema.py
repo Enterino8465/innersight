@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from innersight.backend.schema import (
+from innersight.schema import (
     FEATURE_NAMES,
     LOGON_SCHEMA,
     validate_dataframe,

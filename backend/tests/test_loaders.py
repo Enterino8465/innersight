@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from innersight.backend.data.loaders import (
+from innersight.data.loaders import (
     load_csv,
     load_decoy_files,
     load_ldap_directory,

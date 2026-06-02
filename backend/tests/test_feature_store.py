@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from innersight.backend.data.feature_store import FeatureStore
+from innersight.data.feature_store import FeatureStore
 
 
 def test_save_load_features_roundtrip(tmp_path: Path) -> None:
