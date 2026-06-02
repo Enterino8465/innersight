@@ -33,6 +33,10 @@ include = ["innersight*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["../.."]
+addopts = "-m \"not slow\""
+markers = [
+    "slow: end-to-end / integration tests that train a real model (skip with -m \"not slow\")",
+]
 
 [tool.ruff]
 line-length = 120

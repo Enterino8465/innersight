@@ -6,6 +6,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.ruff_cache/
+.pytest_cache/
 
 # Env
 .env
