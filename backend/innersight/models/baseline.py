@@ -183,3 +183,174 @@ def compute_role_cohorts(
         len(result), n_role, n_dept, n_global, len(cache),
     )
     return result
+
+
+# ── Per-user EMA baseline ────────────────────────────────────────────────────
+class PerUserBaseline:
+    """EMA baseline that z-scores each user's day against their own normal.
+
+    For each user we maintain an exponentially-weighted mean and variance of
+    daily behaviour. A day's deviation is its z-score *against the baseline as it
+    stood before that day* — so a sudden change shows up as a large deviation
+    before the baseline has had a chance to absorb it.
+
+    Cold-start: a brand-new user has no personal history, so their baseline is
+    seeded from a cohort prior (see :func:`compute_role_cohorts`). Without a
+    cohort, a user with enough history bootstraps from their own first
+    ``min_history_days``; a user with too little history is treated as invisible
+    (all-zero deviations).
+
+    Attributes:
+        ema_alpha: EMA smoothing factor in ``(0, 1]``; larger adapts faster.
+        min_history_days: Days required to bootstrap a baseline without a cohort.
+        std_floor: Per-feature lower bound on the z-score denominator, shape ``(18,)``.
+        variance_eps: Small constant added to the EMA variance before its square
+            root to avoid a zero-variance blow-up.
+    """
+
+    def __init__(
+        self,
+        ema_alpha: float = 0.05,
+        min_history_days: int = 14,
+        std_floor: np.ndarray | None = None,
+        variance_eps: float = 1e-6,
+    ) -> None:
+        self.ema_alpha = float(ema_alpha)
+        self.min_history_days = int(min_history_days)
+        self.variance_eps = float(variance_eps)
+
+        if std_floor is None:
+            std_floor = np.full(NUM_FEATURES, 0.1, dtype=float)  # shape: (18,)
+        else:
+            std_floor = np.asarray(std_floor, dtype=float)
+            if std_floor.shape != (NUM_FEATURES,):
+                raise ValueError(f"std_floor must have shape ({NUM_FEATURES},), got {std_floor.shape}")
+        self.std_floor = std_floor  # shape: (18,)
+
+    @classmethod
+    def from_config(
+        cls,
+        config: dict,
+        global_median_stds: np.ndarray | None = None,
+    ) -> PerUserBaseline:
+        """Build a baseline from a config dict (e.g. ``DEFAULT_BASELINE_CONFIG``).
+
+        Args:
+            config: Dict with ``ema_alpha``, ``min_history_days``,
+                ``std_floor_ratio`` and ``variance_eps`` keys.
+            global_median_stds: Optional per-feature median std, shape ``(18,)``
+                (see :func:`compute_global_median_stds`). When given, the std
+                floor is ``global_median_stds * config['std_floor_ratio']``;
+                otherwise the constructor default (all ``0.1``) is used.
+
+        Returns:
+            A configured :class:`PerUserBaseline`.
+        """
+        std_floor: np.ndarray | None = None
+        if global_median_stds is not None:
+            # shape: (18,)
+            std_floor = np.asarray(global_median_stds, dtype=float) * config["std_floor_ratio"]
+        return cls(
+            ema_alpha=config["ema_alpha"],
+            min_history_days=config["min_history_days"],
+            std_floor=std_floor,
+            variance_eps=config["variance_eps"],
+        )
+
+    def compute_deviations(
+        self,
+        user_features: dict[str, pd.DataFrame],
+        role_cohort_stats: dict[str, CohortStats] | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Z-score every user's daily features against their evolving baseline.
+
+        Args:
+            user_features: Mapping ``user_id`` → DataFrame whose columns are the
+                18 FEATURE_NAMES, with rows sorted by date ascending.
+            role_cohort_stats: Optional mapping ``user_id`` → :class:`CohortStats`
+                used to seed cold-start users. Users present here are scored from
+                day 0 using the cohort prior.
+
+        Returns:
+            Mapping ``user_id`` → deviation array of shape ``(n_days, 18)``.
+            Rows before a user's start day (and every row for invisible users)
+            are zero.
+        """
+        role_cohort_stats = role_cohort_stats or {}
+        out: dict[str, np.ndarray] = {}
+
+        for uid, df in user_features.items():
+            x = df[FEATURE_NAMES].to_numpy(dtype=float)        # shape: (n_days, 18)
+            n_days = x.shape[0]
+            dev = np.zeros((n_days, NUM_FEATURES), dtype=float)  # shape: (n_days, 18)
+
+            cohort = role_cohort_stats.get(uid)
+            if cohort is not None:
+                ema_mean = cohort.mean.astype(float).copy()    # shape: (18,)
+                ema_var = cohort.var.astype(float).copy()      # shape: (18,)
+                start_day = 0
+            elif n_days >= self.min_history_days:
+                boot = x[: self.min_history_days]              # shape: (min_history_days, 18)
+                ema_mean = boot.mean(axis=0)                   # shape: (18,)
+                ema_var = boot.var(axis=0)                     # shape: (18,) (population var)
+                start_day = self.min_history_days
+            else:
+                out[uid] = dev  # too little history, no cohort → invisible (all zeros)
+                continue
+
+            alpha = self.ema_alpha
+            for t in range(start_day, n_days):
+                x_t = x[t]                                     # shape: (18,)
+                # (a) Score against the PAST baseline — before this day is absorbed.
+                std = np.sqrt(ema_var + self.variance_eps)     # shape: (18,)
+                denom = np.maximum(std, self.std_floor)        # shape: (18,)
+                dev[t] = (x_t - ema_mean) / denom              # shape: (18,)
+                # (b) Update the EMA mean, then (c) the EMA variance about it.
+                ema_mean = (1.0 - alpha) * ema_mean + alpha * x_t
+                ema_var = (1.0 - alpha) * ema_var + alpha * (x_t - ema_mean) ** 2
+
+            out[uid] = dev  # shape: (n_days, 18)
+
+        return out
+
+    def compute_deviations_df(
+        self,
+        features_df: pd.DataFrame,
+        role_cohort_stats: dict[str, CohortStats] | None = None,
+    ) -> pd.DataFrame:
+        """Z-score a full features DataFrame, returning the same shape of frame.
+
+        Groups ``features_df`` by user, sorts each user's rows by date, runs
+        :meth:`compute_deviations`, and reassembles the per-user deviation
+        arrays back into a single DataFrame. This is the primary interface for
+        the compute_baselines script (Task 4).
+
+        Args:
+            features_df: Daily features with columns ``user``, ``date`` and the
+                18 FEATURE_NAMES columns (raw counts).
+            role_cohort_stats: Optional cohort priors for cold-start users.
+
+        Returns:
+            DataFrame with columns ``user``, ``date`` and the 18 FEATURE_NAMES,
+            where the feature columns now hold z-scored deviations instead of
+            raw counts.
+        """
+        user_features: dict[str, pd.DataFrame] = {}
+        user_dates: dict[str, np.ndarray] = {}
+        for uid, grp in features_df.groupby("user", sort=False):
+            ordered = grp.sort_values("date")
+            user_features[uid] = ordered[FEATURE_NAMES].reset_index(drop=True)
+            user_dates[uid] = ordered["date"].to_numpy()
+
+        deviations = self.compute_deviations(user_features, role_cohort_stats)
+
+        frames: list[pd.DataFrame] = []
+        for uid, dev in deviations.items():
+            frame = pd.DataFrame(dev, columns=FEATURE_NAMES)  # shape: (n_days, 18)
+            frame.insert(0, "date", user_dates[uid])
+            frame.insert(0, "user", uid)
+            frames.append(frame)
+
+        if not frames:
+            return pd.DataFrame(columns=["user", "date", *FEATURE_NAMES])
+        return pd.concat(frames, ignore_index=True)
