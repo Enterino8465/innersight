@@ -134,6 +134,11 @@ def compute_role_cohorts(
     if not users_with_data:
         return {}
 
+    # Without any LDAP records there is no role/department structure to build
+    # cohorts from, so there is nothing to assign.
+    if ldap_df is None or ldap_df.empty or "user_id" not in ldap_df.columns:
+        return {}
+
     # One LDAP row per user (latest snapshot wins), restricted to users we have
     # behavioural data for — a cohort with no observed days is useless.
     ldap = ldap_df.drop_duplicates(subset="user_id", keep="last")
