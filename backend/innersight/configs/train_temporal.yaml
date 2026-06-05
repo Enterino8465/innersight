@@ -1,0 +1,29 @@
+# Temporal CNN (Module 2) — dilated causal CNN on raw (18, 28) deviation windows.
+# Consumed by scripts/train_temporal.py.
+model:
+  type: temporal_cnn
+  in_channels: 18
+  hidden: 64
+  out_dim: 128
+  dropout: 0.3
+  kernel_size: 3
+
+training:
+  loss: focal
+  focal_alpha: 0.75
+  focal_gamma: 2.0
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  scheduler: cosine
+  warmup_epochs: 5
+  eta_min: 0.00001
+  max_epochs: 100
+  patience: 10
+  batch_size: 64
+
+evaluation:
+  primary_metric: auprc
+  n_folds: 5
+  seeds: [42, 123, 456]
