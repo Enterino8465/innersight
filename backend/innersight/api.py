@@ -667,5 +667,145 @@ def get_model_comparison():
     return jsonify({'ladder': ladder, 'per_scenario': per_scenario, 'results_dir': results_dir})
 
 
+# ── Per-user visualisation data (heatmap / attention / graph) ─────────────────
+
+_VIZ_VERSION = 'r4.2'
+_user_logs_cache = None
+
+
+def _user_deviation_rows(user_id, last=28):
+    """(deviations DataFrame or None, the user's last-`last` rows or None)."""
+    from innersight.data.feature_store import FeatureStore
+    deviations = FeatureStore(MODEL_DIR).load_deviations(_VIZ_VERSION)
+    if deviations is None:
+        return None, None
+    rows = deviations[deviations['user'] == user_id].sort_values('date').tail(last)
+    return deviations, rows
+
+
+@app.get('/api/users/<user_id>/deviations')
+def get_user_deviations(user_id):
+    """Days × 18-feature z-score matrix for the deviation heatmap."""
+    from innersight.schema import FEATURE_NAMES
+    deviations, rows = _user_deviation_rows(user_id)
+    if deviations is None:
+        return jsonify({'error': 'Deviations not computed yet.'}), 503
+    if rows is None or rows.empty:
+        return jsonify({'error': f'No deviations for user {user_id!r}.'}), 404
+    matrix = rows[FEATURE_NAMES].to_numpy(dtype=float).tolist()
+    days = [str(pd.Timestamp(d).date()) for d in rows['date']]
+    return jsonify({'matrix': matrix, 'feature_names': list(FEATURE_NAMES), 'day_labels': days})
+
+
+@app.get('/api/users/<user_id>/attention')
+def get_user_attention(user_id):
+    """Per-day attention weights (demo: softmax over mean |z| per day)."""
+    import numpy as np
+    from innersight.schema import FEATURE_NAMES
+    deviations, rows = _user_deviation_rows(user_id)
+    if deviations is None:
+        return jsonify({'error': 'Deviations not computed yet.'}), 503
+    if rows is None or rows.empty:
+        return jsonify({'error': f'No deviations for user {user_id!r}.'}), 404
+    magnitude = np.abs(rows[FEATURE_NAMES].to_numpy(dtype=float)).mean(axis=1)
+    weights = np.exp(magnitude - magnitude.max())
+    total = weights.sum()
+    attention = (weights / total if total > 0 else np.ones(len(magnitude)) / len(magnitude)).tolist()
+    return jsonify({'attention': attention, 'n_days': len(attention)})
+
+
+def _get_viz_logs():
+    global _user_logs_cache
+    if _user_logs_cache is None:
+        from innersight.data.pipeline import load_version
+        _user_logs_cache = load_version(DATA_DIR, _VIZ_VERSION).logs
+    return _user_logs_cache
+
+
+def _viz_domain(url):
+    from urllib.parse import urlparse
+    try:
+        netloc = urlparse(str(url)).netloc.lower()
+        return netloc or str(url).lower()
+    except Exception:
+        return str(url).lower()
+
+
+def _after_hours_ratio(df):
+    from innersight.config import BUSINESS_HOURS_END, BUSINESS_HOURS_START
+    if df.empty:
+        return 0.0
+    hour = pd.to_datetime(df['date']).dt.hour
+    return float(((hour < BUSINESS_HOURS_START) | (hour >= BUSINESS_HOURS_END)).mean())
+
+
+def _ratio_color(ratio):
+    """Green (low after-hours) → amber → red (high after-hours)."""
+    return '#0F6E56' if ratio < 0.34 else '#D97706' if ratio < 0.67 else '#DC2626'
+
+
+@app.get('/api/users/<user_id>/graph')
+def get_user_graph(user_id):
+    """Direct-neighbourhood nodes/edges (PCs, URLs, emailed users) for the mini graph."""
+    from innersight.config import INTERNAL_DOMAIN
+    try:
+        logs = _get_viz_logs()
+    except Exception as exc:
+        logger.warning('get_user_graph | could not load logs: %s', exc)
+        return jsonify({'nodes': [{'id': user_id, 'type': 'user', 'label': user_id}], 'edges': []})
+
+    nodes = [{'id': user_id, 'type': 'user', 'label': user_id}]
+    edges = []
+    seen = {user_id}
+
+    def add_node(node_id, ntype, label):
+        if node_id not in seen:
+            nodes.append({'id': node_id, 'type': ntype, 'label': label})
+            seen.add(node_id)
+
+    logon = logs.get('logon')
+    if logon is not None and not logon.empty and 'pc' in logon.columns:
+        for pc, grp in logon[logon['user'] == user_id].groupby('pc'):
+            nid = f'pc:{pc}'
+            add_node(nid, 'pc', str(pc))
+            edges.append({'source': user_id, 'target': nid, 'weight': int(len(grp)),
+                          'color': _ratio_color(_after_hours_ratio(grp))})
+
+    http = logs.get('http')
+    if http is not None and not http.empty and 'url' in http.columns:
+        mine = http[http['user'] == user_id].copy()
+        if not mine.empty:
+            mine['_dom'] = mine['url'].apply(_viz_domain)
+            for dom, grp in mine.groupby('_dom'):
+                nid = f'url:{dom}'
+                add_node(nid, 'url', str(dom))
+                edges.append({'source': user_id, 'target': nid, 'weight': int(len(grp)),
+                              'color': _ratio_color(_after_hours_ratio(grp))})
+
+    email = logs.get('email')
+    if email is not None and not email.empty:
+        suffix = f'@{INTERNAL_DOMAIN.lower()}'
+        mine = email[email['user'] == user_id]
+        for _, row in mine.iterrows():
+            ratio = _after_hours_ratio(row.to_frame().T)
+            for col in ('to', 'cc', 'bcc'):
+                value = row.get(col)
+                if not isinstance(value, str):
+                    continue
+                for addr in value.lower().split(';'):
+                    addr = addr.strip()
+                    if not addr.endswith(suffix):
+                        continue
+                    rid = addr.split('@')[0]
+                    if rid == user_id:
+                        continue
+                    nid = f'user:{rid}'
+                    add_node(nid, 'user', rid)
+                    edges.append({'source': user_id, 'target': nid, 'weight': 1,
+                                  'color': _ratio_color(ratio)})
+
+    return jsonify({'nodes': nodes, 'edges': edges})
+
+
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
