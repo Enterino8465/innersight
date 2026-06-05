@@ -1,0 +1,28 @@
+# Full fusion model (Phase 6) — temporal + graph + static context (OCEAN, role, dept).
+# Consumed by scripts/train_fusion.py.
+model:
+  type: fusion
+  temporal: {in_channels: 18, hidden: 64, out_dim: 128, dropout: 0.3}
+  graph: {hidden_dim: 128, num_layers: 2, heads: 4, dropout: 0.3}
+  static: {ocean_dim: 5, role_emb_dim: 8, dept_emb_dim: 3}
+  head: {dims: [272, 128, 64, 1], dropout: 0.4}
+
+training:
+  loss: focal
+  focal_alpha: 0.75
+  focal_gamma: 2.0
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  scheduler: cosine
+  warmup_epochs: 5
+  eta_min: 0.00001
+  max_epochs: 100
+  patience: 10
+  batch_size: 64
+
+evaluation:
+  primary_metric: auprc
+  n_folds: 5
+  seeds: [42, 123, 456]
