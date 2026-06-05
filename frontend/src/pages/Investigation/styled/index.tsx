@@ -127,3 +127,71 @@ export const SError = styled.p`
   color: #DC2626;
   font-size: 15px;
 `
+
+// ── Visualisation cards / layout (Phase 7) ──────────────────────────────────
+
+export const SCard = styled.div`
+  background: white;
+  border: 1px solid #ededea;
+  border-radius: 12px;
+  padding: 16px;
+`
+
+export const SSplit = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: 860px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const SColumn = styled.div`
+  min-width: 0;
+`
+
+export const SFeatureList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const SFeatureRow = styled.div`
+  display: grid;
+  grid-template-columns: 200px 1fr 120px;
+  align-items: center;
+  gap: 12px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+`
+
+export const SFeatureName = styled.span`
+  font-size: 13px;
+  color: #1a1a2e;
+  font-weight: 600;
+`
+
+export const SFeatureTrack = styled.div`
+  height: 10px;
+  background: #f1f0ec;
+  border-radius: 5px;
+  overflow: hidden;
+`
+
+export const SFeatureBar = styled.div<{ $ratio: number; $color: string }>`
+  height: 100%;
+  width: ${({ $ratio }) => Math.max(0, Math.min(1, $ratio)) * 100}%;
+  background: ${({ $color }) => $color};
+`
+
+export const SFeatureValue = styled.span`
+  font-size: 13px;
+  color: #888780;
+  text-align: right;
+  white-space: nowrap;
+`
