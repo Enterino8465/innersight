@@ -119,9 +119,8 @@ def build_features_tensor(
     Returns:
         ``(X, y, user_ids)`` where *X* is float32 of shape ``(N, num_features)``,
         *y* is float32 of shape ``(N, 1)``, and *user_ids* is a list of N
-        user ID strings in the same row order as *X* — required by
-        :class:`~innersight.models.embeddings.EmbeddingManager` for
-        alignment with Node2Vec embeddings.
+        user ID strings in the same row order as *X* — used to align
+        optional per-user embeddings with their feature rows.
     """
     from innersight.features.features import build_user_day_features
     from innersight.config import FEATURE_COLS
@@ -152,19 +151,19 @@ def build_dataloaders(
     """Build train/val/test :class:`~torch.utils.data.DataLoader` objects.
 
     Fits a :class:`Standardizer` on the training split and applies it to all
-    splits. When an active :class:`EmbeddingManager` is supplied, Node2Vec
-    embeddings are concatenated after standardisation so the combined tensor
-    lands in the :class:`TensorDataset` and flows into every training batch.
+    splits. When an active embedding provider is supplied, per-user vectors are
+    concatenated after standardisation so the combined tensor lands in the
+    :class:`TensorDataset` and flows into every training batch.
 
     Args:
         data: Output of :func:`data.pipeline.load_data`, containing
             ``data['splits']`` and ``data['labels']``.
         batch_size: Mini-batch size for the training loader (val/test use 256).
-        embedding_manager: Optional
-            :class:`~innersight.models.embeddings.EmbeddingManager`.
-            When provided and ``embedding_manager.available`` is True, each
-            split's feature matrix is extended with aligned user embeddings
-            (concatenated after standardisation, so embeddings are NOT scaled).
+        embedding_manager: Optional embedding provider exposing an
+            ``available`` flag and ``get_combined_features(X_std, user_ids)``.
+            When provided and ``available`` is True, each split's feature matrix
+            is extended with aligned user embeddings (concatenated after
+            standardisation, so embeddings are NOT scaled).
 
     Returns:
         Dict with keys ``"train_loader"``, ``"val_loader"``, ``"test_loader"``,
@@ -194,8 +193,8 @@ def build_dataloaders(
     for split_name, (X, y, user_ids) in tensors.items():
         X_std = X_train_std if split_name == "train" else standardizer.transform(X)
 
-        # Optionally append Node2Vec embeddings (not standardised — they're
-        # already meaningful representations from the random-walk training).
+        # Optionally append per-user embedding vectors (not standardised —
+        # they are already meaningful learned representations).
         if embedding_manager is not None and getattr(embedding_manager, 'available', False):
             X_final = embedding_manager.get_combined_features(X_std, user_ids)
         else:

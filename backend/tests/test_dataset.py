@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import torch
-from innersight.models.dataset import Standardizer, build_features_tensor, build_dataloaders
+from innersight.models.dataset import Standardizer, build_features_tensor
 from innersight.config import FEATURE_COLS
 
 N_FEAT = len(FEATURE_COLS)
@@ -129,45 +129,3 @@ def test_build_features_tensor_malicious_label():
     labels = {('u1', datetime.date(2010, 6, 1))}
     X, y, _ = build_features_tensor({'logon': _logon_df()}, labels=labels)
     assert y[0, 0].item() == 1.0
-
-
-# ── build_dataloaders with EmbeddingManager ───────────────────────────────────
-
-def test_build_dataloaders_with_embeddings():
-    """Passing an active EmbeddingManager doubles the feature width per batch."""
-    from torch.utils.data import TensorDataset, DataLoader
-    from innersight.models.embeddings import EmbeddingManager
-
-    EMB_DIM = 32
-    USERS   = ['u1', 'u2', 'u3']
-
-    # Build a tiny synthetic EmbeddingManager without touching disk
-    mgr = EmbeddingManager.__new__(EmbeddingManager)
-    mgr.embeddings    = torch.randn(len(USERS), EMB_DIM)
-    mgr.user_to_idx   = {u: i for i, u in enumerate(USERS)}
-    mgr.embedding_dim = EMB_DIM
-    mgr.available     = True
-
-    # Fake data dict matching build_dataloaders' contract
-    logon_df = pd.DataFrame({
-        'id':       ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'],
-        'date':     pd.to_datetime(['2010-06-01'] * 3 + ['2010-06-02'] * 3),
-        'user':     ['u1', 'u2', 'u3', 'u1', 'u2', 'u3'],
-        'pc':       ['PC1'] * 6,
-        'activity': ['Logon'] * 6,
-    })
-    data = {
-        'labels': set(),
-        'splits': {
-            'train': {'logon': logon_df},
-            'val':   {'logon': logon_df},
-            'test':  {'logon': logon_df},
-        },
-    }
-
-    loaders = build_dataloaders(data, batch_size=4, embedding_manager=mgr)
-    X_batch, _ = next(iter(loaders['train_loader']))
-
-    assert X_batch.shape[1] == N_FEAT + EMB_DIM, (
-        f"Expected {N_FEAT + EMB_DIM} features, got {X_batch.shape[1]}"
-    )

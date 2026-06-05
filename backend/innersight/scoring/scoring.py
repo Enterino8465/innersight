@@ -1,19 +1,17 @@
-"""Employee risk scoring — supports both InsiderThreatMLP and InsiderThreatGNN.
+"""Employee risk scoring for InsiderThreatMLP checkpoints.
 
 Public API (unchanged):
   score_employees(date, threshold=0.7)  → list[dict]
   load_alerts(status_filter)            → list[dict]
   update_alert_status(alert_id, status) → dict
 
-Checkpoint format (Option A — model_type tag):
-  MLP:      {'state_dict', 'layer_sizes', 'model_type': 'mlp'}
-  GraphSAGE:{'state_dict', 'metadata', 'config', 'graphs_dir', 'model_type': 'graphsage'}
+Checkpoint format:
+  MLP: {'state_dict', 'layer_sizes', 'model_type': 'mlp'}
 
 Backward-compat: checkpoints without 'model_type' are assumed to be MLP.
 """
 
 import logging
-import os
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -47,19 +45,19 @@ _FEATURE_COLS       = FEATURE_COLS
 
 def _load_checkpoint(path: str, device: torch.device):
     """Load a checkpoint file, returning ``(ckpt_dict, model_type)``."""
-    # weights_only=False required for GNN checkpoints (contain dicts/tuples).
+    # weights_only=False: checkpoints contain non-tensor metadata (e.g. layer_sizes).
     ckpt = torch.load(path, map_location=device, weights_only=False)
     model_type = ckpt.get('model_type', 'mlp')   # backward compat default
     return ckpt, model_type
 
 
 def _load_model_and_standardizer() -> Optional[tuple]:
-    """Load either an MLP or GNN model from the canonical checkpoint path.
+    """Load the MLP model from the canonical checkpoint path.
 
     Returns
     -------
     tuple
-        ``(model, standardizer_or_None, device, model_type)`` on success,
+        ``(model, standardizer, device, model_type)`` on success,
         ``None`` on failure (error logged).
     """
     try:
@@ -84,21 +82,7 @@ def _load_model_and_standardizer() -> Optional[tuple]:
             return None
         return model, standardizer, device, 'mlp'
 
-    if model_type == 'graphsage':
-        from innersight.models.graphsage import InsiderThreatGNN
-        model_cfg = ckpt.get('config', {})
-        model = InsiderThreatGNN(
-            metadata=ckpt['metadata'],
-            hidden_dim=model_cfg.get('hidden_dim', 128),
-            num_layers=model_cfg.get('num_layers', 2),
-            dropout=model_cfg.get('dropout', 0.3),
-            head_layers=model_cfg.get('head_layers', [128, 64]),
-        )
-        model.load_state_dict(ckpt['state_dict'])
-        model.to(device).eval()
-        return model, None, device, 'graphsage'
-
-    logger.error("Unknown model_type %r in checkpoint", model_type)
+    logger.error("Unsupported model_type %r in checkpoint", model_type)
     return None
 
 
@@ -126,9 +110,6 @@ def get_top_features(
 def score_employees(date: str, threshold: float = 0.7) -> list[dict]:
     """Score all employees and persist alerts above *threshold*.
 
-    Works with both MLP and GNN checkpoints; which model is active is
-    detected automatically from the checkpoint's ``model_type`` field.
-
     Args:
         date:      ISO date string, e.g. ``'2010-09-15'``.
         threshold: Risk-score threshold; users at or below it are ignored.
@@ -139,12 +120,8 @@ def score_employees(date: str, threshold: float = 0.7) -> list[dict]:
     loaded = _load_model_and_standardizer()
     if loaded is None:
         return []
-    model, standardizer, device, model_type = loaded
-
-    if model_type == 'mlp':
-        return _score_mlp(model, standardizer, device, date, threshold)
-    else:
-        return _score_gnn(model, device, date, threshold)
+    model, standardizer, device, _model_type = loaded
+    return _score_mlp(model, standardizer, device, date, threshold)
 
 
 # ---------------------------------------------------------------------------
@@ -215,108 +192,6 @@ def _score_mlp(
     logger.info(
         'score_employees (mlp) | date=%s | users_scored=%d | alerts=%d',
         date, n_rows, len(new_alerts),
-    )
-    return new_alerts
-
-
-# ---------------------------------------------------------------------------
-# GNN scoring path
-# ---------------------------------------------------------------------------
-
-def _score_gnn(
-    model,
-    device: torch.device,
-    date: str,
-    threshold: float,
-) -> list[dict]:
-    """Score users using the GNN model on the full training graph.
-
-    The GNN score for each user is derived from the trained graph
-    representation (2-hop neighbourhood context).  Feature-level
-    explanation falls back to the same 18 hand-crafted flat features
-    used by the MLP, computed from the raw logs for *date*.  If raw
-    logs are unavailable, top_features is left empty.
-    """
-    # ── Load the graph to get user IDs ────────────────────────────────────────
-    try:
-        ckpt, _ = _load_checkpoint(_BEST_MODEL_PT_PATH, device)
-        graphs_dir = ckpt.get('graphs_dir', 'checkpoints')
-        graph_path = os.path.join(graphs_dir, 'graphs', 'train_graph.pt')
-        graph = torch.load(graph_path, weights_only=False)
-    except Exception as exc:
-        logger.error('GNN scoring: failed to load graph: %s', exc)
-        return []
-
-    idx_to_user: dict[int, str] = graph.idx_to_user  # {row_idx: user_id}
-
-    # ── Full-graph inference ──────────────────────────────────────────────────
-    x_dict = {k: v.to(device) for k, v in graph.x_dict.items()}
-    ei_dict = {k: v.to(device) for k, v in graph.edge_index_dict.items()}
-
-    with torch.no_grad():
-        logits = model(x_dict, ei_dict)             # (num_users, 1)
-        probs  = torch.sigmoid(logits).squeeze(1).cpu().numpy()   # (num_users,)
-
-    # ── Flat features for explanation (best-effort) ───────────────────────────
-    user_flat_features: dict[str, pd.Series] = {}
-    mean_np = std_np = None
-    try:
-        data        = load_data()
-        target_date = pd.Timestamp(date).normalize()
-        filtered_logs: dict[str, list] = {}
-        for logs_dict in data['splits'].values():
-            for log_name, df in logs_dict.items():
-                if df.empty or 'date' not in df.columns:
-                    continue
-                day_df = df[df['date'].dt.normalize() == target_date]
-                if not day_df.empty:
-                    filtered_logs.setdefault(log_name, []).append(day_df)
-        day_logs = {
-            name: pd.concat(parts, ignore_index=True)
-            for name, parts in filtered_logs.items()
-        }
-        feat_df = build_user_day_features(day_logs, malicious_tuples=data['labels'])
-        if not feat_df.empty:
-            # Build population mean/std over available users for z-scoring
-            X_np = np.zeros((len(feat_df), len(_FEATURE_COLS)), dtype=np.float64)
-            for j, col in enumerate(_FEATURE_COLS):
-                if col in feat_df.columns:
-                    X_np[:, j] = feat_df[col].values.astype(np.float64)
-            mean_np = X_np.mean(axis=0)
-            std_np  = X_np.std(axis=0)
-            for _, row in feat_df.reset_index(drop=True).iterrows():
-                user_flat_features[str(row['user'])] = row
-    except Exception as exc:
-        logger.debug('GNN scoring: flat features unavailable (%s) — top_features will be empty', exc)
-
-    # ── Build alerts ──────────────────────────────────────────────────────────
-    now_iso    = datetime.now(timezone.utc).isoformat()
-    new_alerts = []
-    for idx, score in enumerate(probs):
-        score = float(score)
-        if score <= threshold:
-            continue
-        user_id = idx_to_user.get(idx, f'user_{idx}')
-
-        if mean_np is not None and user_id in user_flat_features:
-            top_feats = get_top_features(user_flat_features[user_id], mean_np, std_np)
-        else:
-            top_feats = []   # GNNExplainer can fill this in Phase 8
-
-        new_alerts.append({
-            'id':           str(uuid.uuid4()),
-            'user':         user_id,
-            'date':         date,
-            'score':        round(score, 4),
-            'status':       'open',
-            'created_at':   now_iso,
-            'top_features': top_feats,
-        })
-
-    _persist_alerts(new_alerts)
-    logger.info(
-        'score_employees (gnn) | date=%s | users_scored=%d | alerts=%d',
-        date, len(probs), len(new_alerts),
     )
     return new_alerts
 

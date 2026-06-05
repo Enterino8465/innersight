@@ -102,11 +102,12 @@ def train(
         config: Training hyper-parameters; missing keys fall back to
             ``DEFAULT_TRAINING_CONFIG``.
         event_callback: Optional callable invoked with each progress dict.
-        embedding_manager: Optional EmbeddingManager. When provided and active,
-            Node2Vec embeddings are appended to each split's feature tensor
-            before the DataLoader is built, increasing the input width from 18
-            to ``18 + embedding_dim``. The layer_sizes in *config* must reflect
-            this wider input (e.g. ``[146, 128, 64, 1]``).
+        embedding_manager: Optional embedding provider (see
+            :func:`~innersight.models.dataset.build_dataloaders`). When provided
+            and active, per-user embeddings are appended to each split's feature
+            tensor before the DataLoader is built, increasing the input width
+            from 18 to ``18 + embedding_dim``. The layer_sizes in *config* must
+            reflect this wider input (e.g. ``[146, 128, 64, 1]``).
 
     Returns:
         Dict with final val and test metrics.

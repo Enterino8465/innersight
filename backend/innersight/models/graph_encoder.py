@@ -6,9 +6,6 @@ temporal embeddings (Module 2); pc/url/file features are behavioural aggregates.
 Edge features (counts, after-hours fractions, novelty flags) are projected to the
 hidden size and fed into GATv2 attention so the model can weight *how* a user
 connects to an entity, not just whether.
-
-The existing :class:`HeteroGraphSAGE` (SAGEConv, no edge features) stays for
-backward compatibility; this is a separate, richer encoder.
 """
 
 from __future__ import annotations

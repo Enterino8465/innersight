@@ -183,6 +183,36 @@ FEATURE_NAMES: list[str] = [
 ]
 
 
+# ── Raw per-user-per-day feature-vector contract ─────────────────────────────
+@dataclass(frozen=True)
+class FeatureVector:
+    """Contract for the 18 hand-crafted per-user-per-day features.
+
+    Describes the raw (pre-standardisation) feature layout consumed by the
+    models. Every component is a non-negative count or size, so the canonical
+    ``valid_range`` is ``(0, +inf)`` — values outside it indicate a bug in
+    feature construction.
+
+    Attributes:
+        columns: The 18 FEATURE_NAMES, in canonical order (the vector layout).
+        dtypes: Mapping of column name → expected pandas dtype.
+        valid_range: Inclusive ``(min, max)`` bound every component must satisfy.
+    """
+    columns: tuple[str, ...] = tuple(FEATURE_NAMES)
+    dtypes: dict[str, str] = field(
+        default_factory=lambda: {name: 'int64' for name in FEATURE_NAMES}
+    )
+    valid_range: tuple[float, float] = (0.0, float('inf'))
+
+    @property
+    def num_features(self) -> int:
+        return len(self.columns)
+
+
+# Canonical singleton describing the raw feature-vector layout.
+FEATURE_VECTOR = FeatureVector()
+
+
 def validate_dataframe(
     df: pd.DataFrame,
     schema: ColumnSchema,

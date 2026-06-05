@@ -193,39 +193,17 @@ def _get_model():
             checkpoint = torch.load(
                 _BEST_MODEL_PT_PATH, map_location=device, weights_only=False
             )
-            model_type = checkpoint.get('model_type', 'mlp')
-
-            if model_type == 'graphsage':
-                from innersight.models.graphsage import InsiderThreatGNN
-                model_cfg = checkpoint.get('config', {})
-                model = InsiderThreatGNN(
-                    metadata=checkpoint['metadata'],
-                    hidden_dim=model_cfg.get('hidden_dim', 128),
-                    num_layers=model_cfg.get('num_layers', 2),
-                    dropout=model_cfg.get('dropout', 0.3),
-                    head_layers=model_cfg.get('head_layers', [128, 64]),
-                )
-                model.load_state_dict(checkpoint['state_dict'])
-                model.to(device).eval()
-                # GNN has no standardizer; score-history endpoint falls back gracefully.
-                _model_cache = {
-                    'model_type': 'graphsage',
-                    'model': model,
-                    'standardizer': None,
-                    'device': device,
-                }
-            else:
-                layer_sizes  = checkpoint.get('layer_sizes', DEFAULT_TRAINING_CONFIG['layer_sizes'])
-                model        = InsiderThreatMLP(layer_sizes)
-                model.load_state_dict(checkpoint['state_dict'])
-                model.to(device).eval()
-                standardizer = Standardizer.load(_STANDARDIZER_PATH)
-                _model_cache = {
-                    'model_type': 'mlp',
-                    'model': model,
-                    'standardizer': standardizer,
-                    'device': device,
-                }
+            layer_sizes  = checkpoint.get('layer_sizes', DEFAULT_TRAINING_CONFIG['layer_sizes'])
+            model        = InsiderThreatMLP(layer_sizes)
+            model.load_state_dict(checkpoint['state_dict'])
+            model.to(device).eval()
+            standardizer = Standardizer.load(_STANDARDIZER_PATH)
+            _model_cache = {
+                'model_type': 'mlp',
+                'model': model,
+                'standardizer': standardizer,
+                'device': device,
+            }
         except FileNotFoundError:
             logger.warning('No trained model found at %s', _BEST_MODEL_PT_PATH)
             _model_cache = None
@@ -516,11 +494,6 @@ def get_employee_score_history(user_id):
     model_tuple = _get_model()
     if model_tuple is None:
         return jsonify({'error': 'No trained model available'}), 503
-
-    if model_tuple.get('model_type') == 'graphsage':
-        # Score-history requires per-day flat-feature inference; not yet supported
-        # for GNN models (planned for Phase 8 with GNNExplainer).
-        return jsonify({'error': 'Score history not yet supported for GNN models'}), 503
 
     model        = model_tuple['model']
     standardizer = model_tuple['standardizer']
