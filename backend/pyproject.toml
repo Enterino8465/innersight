@@ -20,6 +20,7 @@ dependencies = [
     "networkx",
     "torch-geometric",
     "xgboost>=2.0",
+    "qdrant-client>=1.9",
 ]
 
 [project.optional-dependencies]
