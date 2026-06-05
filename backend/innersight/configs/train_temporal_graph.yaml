@@ -1,0 +1,36 @@
+# Temporal + Graph chained model (Phase 5, step 3 of the progressive ladder).
+# Module 2 (TemporalPatternEncoder) embeddings are injected as user node
+# features into the windowed graph, then Module 3 (GraphContextEncoder) enriches
+# them via GATv2 message passing before classification.
+model:
+  type: temporal_graph
+  temporal:
+    in_channels: 18
+    hidden: 64
+    out_dim: 128
+    dropout: 0.3
+  graph:
+    hidden_dim: 128
+    num_layers: 2
+    heads: 4
+    dropout: 0.3
+
+training:
+  loss: focal
+  focal_alpha: 0.75
+  focal_gamma: 2.0
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  scheduler: cosine
+  warmup_epochs: 5
+  eta_min: 0.00001
+  max_epochs: 100
+  patience: 10
+  batch_size: 64
+
+evaluation:
+  primary_metric: auprc
+  n_folds: 5
+  seeds: [42, 123, 456]
