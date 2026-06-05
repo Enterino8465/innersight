@@ -19,6 +19,7 @@ dependencies = [
     "matplotlib",
     "networkx",
     "torch-geometric",
+    "xgboost>=2.0",
 ]
 
 [project.optional-dependencies]
