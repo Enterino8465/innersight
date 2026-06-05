@@ -22,9 +22,7 @@ import os
 import queue as queue_module
 import threading
 import traceback
-import contextlib
-import io
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pandas as pd
 import torch
@@ -43,6 +41,7 @@ from innersight.config import (
 )
 from innersight.models.mlp import InsiderThreatMLP, get_device
 from innersight.models.dataset import Standardizer
+from innersight.scoring.suspect_discovery import SuspectFinder
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -50,6 +49,18 @@ logger = logging.getLogger(__name__)
 _BEST_MODEL_PT_PATH = BEST_MODEL_PT_FILE
 _STANDARDIZER_PATH  = STANDARDIZER_FILE
 _FEATURE_COLS       = FEATURE_COLS
+
+# Lazy Qdrant suspect finder — never built at import time so a missing Qdrant
+# server can't crash the app.
+_suspect_finder = None
+
+
+def _get_suspect_finder():
+    global _suspect_finder
+    if _suspect_finder is None:
+        qdrant_url = os.environ.get('QDRANT_URL', 'http://localhost:6333')
+        _suspect_finder = SuspectFinder(qdrant_url=qdrant_url)
+    return _suspect_finder
 
 app = Flask(__name__)
 CORS(app, origins=['http://localhost:3000', 'http://localhost:5173'])
@@ -478,6 +489,42 @@ def get_employee_score_history(user_id):
 
     _score_history_cache[cache_key] = history
     return jsonify(history)
+
+
+# ── Qdrant suspect discovery (Phase 5) ────────────────────────────────────────
+
+@app.route('/api/qdrant/health')
+def get_qdrant_health():
+    """Report whether the Qdrant vector store is reachable."""
+    status = 'ok' if _get_suspect_finder().health_check() else 'unavailable'
+    return jsonify({'status': status})
+
+
+@app.route('/api/users/<user_id>/similar')
+def get_similar_users(user_id):
+    """k-NN suspect discovery: users most similar to *user_id* in embedding space.
+
+    Query params:
+        k:       number of neighbours (default 10).
+        version: restrict to one CERT version; omit or pass 'null' to search
+                 across all versions (cross-version discovery).
+    """
+    finder = _get_suspect_finder()
+    if not finder.health_check():
+        return jsonify({'error': 'Qdrant unavailable'}), 503
+
+    try:
+        k = int(request.args.get('k', 10))
+    except (TypeError, ValueError):
+        k = 10
+    version = request.args.get('version')
+    if version in (None, '', 'null', 'None'):
+        version = None
+
+    similar = finder.find_similar(user_id, k=k, version=version)
+    if not similar:
+        return jsonify({'error': f'No embedding found for user {user_id!r}'}), 404
+    return jsonify({'similar_users': similar})
 
 
 if __name__ == '__main__':
