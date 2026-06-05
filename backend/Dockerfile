@@ -17,8 +17,19 @@ COPY backend/ ./
 # `innersight` package resolves to /app/innersight).
 RUN pip install --no-cache-dir -e .
 
+# Bundle the synthetic demo dataset and default to it, so the container works
+# with no env vars. A docker-compose volume + INNERSIGHT_DATA_DIR override this
+# when real CERT data is available.
+COPY data/synthetic_demo/ /app/demo_data/
+ENV INNERSIGHT_DATA_DIR=/app/demo_data
+
+# Entrypoint computes demo baselines on first boot (when no checkpoints exist).
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/api/status')" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')" || exit 1
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["flask", "--app", "innersight.api", "run", "--host", "0.0.0.0", "--port", "5001"]

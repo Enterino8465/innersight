@@ -131,10 +131,22 @@ app = Flask(__name__)
 CORS(app, origins=['http://localhost:3000', 'http://localhost:5173'])
 
 
+_APP_VERSION = '0.1.0'
+
+
 @app.before_request
 def _demo_before_request():
     """Initialise demo mode on the first request (no-op once done / not in demo)."""
+    if request.path == '/health':
+        return  # keep the health check fast and side-effect-free
     _ensure_demo_mode()
+
+
+@app.get('/health')
+def health():
+    """Lightweight liveness probe for the Docker health check (no DB calls)."""
+    mode = 'demo' if os.path.abspath(DATA_DIR) == os.path.abspath(DEMO_DATA_DIR) else 'production'
+    return jsonify({'status': 'ok', 'mode': mode, 'version': _APP_VERSION})
 
 
 _event_queue: queue_module.Queue = queue_module.Queue()

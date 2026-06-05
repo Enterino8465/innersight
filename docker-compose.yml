@@ -6,10 +6,15 @@ services:
     ports:
       - "5001:5001"
     environment:
-      - INNERSIGHT_DATA_DIR=/data
       - INNERSIGHT_MODEL_DIR=/models
+      - QDRANT_URL=http://qdrant:6333
+      # No INNERSIGHT_DATA_DIR → the image falls back to its bundled synthetic
+      # demo data (/app/demo_data). To use real CERT data, uncomment the volume
+      # mount below and the matching line here:
+      # - INNERSIGHT_DATA_DIR=/data
     volumes:
       - ./backend/checkpoints:/models
+      # - /path/to/cert_r4.2:/data  # uncomment for real CERT data
     depends_on:
       qdrant:
         condition: service_healthy
@@ -20,7 +25,8 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   qdrant:
