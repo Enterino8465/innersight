@@ -1,300 +1,223 @@
-"""Extract and save learned GNN user embeddings.
+#!/usr/bin/env python
+"""Extract per-user fusion embeddings from an InsiderThreatDetector checkpoint (Phase 6).
 
-The saved file is format-compatible with EmbeddingManager so GNN embeddings
-can be dropped in wherever Node2Vec embeddings are used (e.g. as input
-features to the MLP head in downstream experiments).
+Runs the full fusion model's ``get_embeddings`` over every deviation window,
+averaging each user's windows into one 272-d embedding (temporal 128 + graph 128
++ static 16). These embeddings are saved as a ``.pt`` file and can optionally be
+synced straight to Qdrant for k-NN suspect discovery.
 
-Saved format (identical to node2vec_trainer.save_embeddings):
-  torch.save({'embeddings': FloatTensor(N, hidden_dim),
-               'user_to_idx': {user_id: row_index}}, output_path)
+(Replaces the legacy GraphSAGE embedding extractor.)
 
-Usage
------
-  # From backend/
-  python scripts/extract_embeddings.py \\
-      --model  checkpoints/graphsage/best_model.pt \\
-      --output checkpoints/gnn_embeddings.pt
-
-  # Optionally override the graph (default: train_graph.pt from checkpoint's graphs_dir)
-  python scripts/extract_embeddings.py \\
-      --model  checkpoints/graphsage/best_model.pt \\
-      --graph  checkpoints/graphs/train_graph.pt \\
-      --output checkpoints/gnn_embeddings.pt
+Usage:
+    python -m innersight.scripts.extract_embeddings \
+        --checkpoint checkpoints/fusion_r4.2.pt \
+        --version r4.2 --data-dir /data/cert_r4.2 \
+        --output embeddings_r4.2.pt --sync
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-import os
+import sys
+from collections import defaultdict
+from pathlib import Path
 
+import numpy as np
 import torch
-import torch.nn.functional as F
 
-from innersight.models.graphsage import InsiderThreatGNN
-from innersight.models.mlp import get_device
+from innersight.config import setup_logging
+from innersight.data.answers import load_insiders
+from innersight.data.feature_store import FeatureStore
+from innersight.data.pipeline import load_version
+from innersight.models.dataset import DeviationWindowDataset
+from innersight.models.fusion_model import InsiderThreatDetector
+from innersight.scoring.suspect_discovery import SuspectFinder
+from innersight.scripts import compute_baselines
+from innersight.scripts.train_fusion import _build_id_vocab, _build_ocean_map, _static_arrays
+from innersight.scripts.train_temporal_graph import (
+    _build_period_graphs,
+    _build_window_registry,
+    _group_positions_by_period,
+)
+from innersight.utils.reproducibility import seed_everything
 
 logger = logging.getLogger(__name__)
 
+_DEVICE = torch.device("cpu")
+_EMBED_DIM = 272
 
-# ---------------------------------------------------------------------------
-# Core extraction function
-# ---------------------------------------------------------------------------
 
-def extract_gnn_embeddings(
-    model_path: str,
-    graph_path: str | None = None,
-    output_path: str = 'checkpoints/gnn_embeddings.pt',
-) -> torch.Tensor:
-    """Extract per-user embeddings from a trained GNN checkpoint.
+def _fused_vector(model, windows, sample_user_ids, graph, ocean, roles, depts) -> torch.Tensor:
+    """The fusion model's ``get_embeddings`` (272-d) with per-sample/graph alignment.
 
-    Parameters
-    ----------
-    model_path:
-        Path to a checkpoint saved by ``gnn_trainer.train_gnn()``.
-        Must contain ``model_type == 'graphsage'``.
-    graph_path:
-        Optional path to the HeteroData ``.pt`` file.  If omitted, the
-        function reads ``graphs_dir`` from the checkpoint and loads
-        ``{graphs_dir}/graphs/train_graph.pt``.
-    output_path:
-        Where to write ``{'embeddings', 'user_to_idx'}`` so that
-        ``EmbeddingManager`` can load the file unchanged.
-
-    Returns
-    -------
-    torch.Tensor
-        Shape ``(num_users, hidden_dim)``.
+    Mirrors ``train_fusion._fusion_logits`` but returns the fused vector before
+    the classification head (what gets stored in Qdrant).
     """
-    device = get_device()
+    temporal_emb = model.temporal(windows)                       # shape: (n, 128)
+    user_map = getattr(graph, "user_to_idx", {})
+    n_user_nodes = graph["user"].x.shape[0]
 
-    # ── 1. Load checkpoint ────────────────────────────────────────────────────
-    logger.info('Loading checkpoint from %s', model_path)
-    ckpt = torch.load(model_path, map_location=device, weights_only=False)
+    graph_emb = torch.zeros_like(temporal_emb)                   # shape: (n, 128)
+    in_graph = [i for i, u in enumerate(sample_user_ids) if u in user_map]
+    if n_user_nodes > 0 and in_graph:
+        rows = torch.tensor([user_map[sample_user_ids[i]] for i in in_graph], dtype=torch.long)
+        user_x = torch.zeros(n_user_nodes, temporal_emb.shape[1],
+                             dtype=temporal_emb.dtype, device=temporal_emb.device)
+        user_x = user_x.index_copy(0, rows, temporal_emb[in_graph])
+        enriched = model.graph({**graph.x_dict, "user": user_x},
+                               graph.edge_index_dict, graph.edge_attr_dict)["user"]
+        graph_emb = graph_emb.index_copy(0, torch.tensor(in_graph, dtype=torch.long), enriched[rows])
 
-    model_type = ckpt.get('model_type', 'unknown')
-    if model_type != 'graphsage':
-        raise ValueError(
-            f"extract_gnn_embeddings requires model_type='graphsage', "
-            f"got {model_type!r} in {model_path}"
-        )
+    static = torch.cat([ocean, model.role_emb(roles), model.dept_emb(depts)], dim=1)  # (n, 16)
+    return torch.cat([temporal_emb, graph_emb, static], dim=1)   # shape: (n, 272)
 
-    # ── 2. Resolve graph path ─────────────────────────────────────────────────
-    if graph_path is None:
-        graphs_dir = ckpt.get('graphs_dir', 'checkpoints')
-        graph_path = os.path.join(graphs_dir, 'graphs', 'train_graph.pt')
-        logger.info('Graph path not specified — using %s', graph_path)
 
-    logger.info('Loading graph from %s', graph_path)
-    graph = torch.load(graph_path, weights_only=False)
+def _load_deviations(store: FeatureStore, version: str, store_dir: str, data_dir: str):
+    deviations = store.load_deviations(version)
+    if deviations is not None:
+        return deviations
+    rc = compute_baselines.main(['--version', version, '--data-dir', data_dir, '--store-dir', store_dir])
+    if rc != 0:
+        return None
+    return store.load_deviations(version)
 
-    # ── 3. Build model and load weights ──────────────────────────────────────
-    model_cfg = ckpt.get('config', {})
-    model = InsiderThreatGNN(
-        metadata=ckpt['metadata'],
-        hidden_dim=model_cfg.get('hidden_dim', 128),
-        num_layers=model_cfg.get('num_layers', 2),
-        dropout=model_cfg.get('dropout', 0.3),
-        head_layers=model_cfg.get('head_layers', [128, 64]),
-    )
-    model.load_state_dict(ckpt['state_dict'])
-    model.to(device).eval()
-    logger.info(
-        'Model loaded: hidden_dim=%d  num_layers=%d  head_layers=%s',
-        model_cfg.get('hidden_dim', 128),
-        model_cfg.get('num_layers', 2),
-        model_cfg.get('head_layers', [128, 64]),
-    )
 
-    # ── 4. Full-graph embedding extraction ────────────────────────────────────
-    x_dict  = {k: v.to(device) for k, v in graph.x_dict.items()}
-    ei_dict = {k: v.to(device) for k, v in graph.edge_index_dict.items()}
+def _per_user_embeddings(model, registry, period_graphs):
+    """Average each user's per-window fused embeddings into one (272,) vector."""
+    windows_t, user_ids, period_keys = registry["windows"], registry["user_ids"], registry["periods"]
+    ocean, roles, depts = registry["ocean"], registry["roles"], registry["depts"]
 
+    by_user: dict[str, list[torch.Tensor]] = defaultdict(list)
+    model.eval()
     with torch.no_grad():
-        embeddings = model.get_embeddings(x_dict, ei_dict)   # (N, hidden_dim)
+        for period, pos in _group_positions_by_period(np.arange(len(user_ids)), period_keys).items():
+            graph = period_graphs.get(period)
+            if graph is None:
+                continue
+            fused = _fused_vector(
+                model, windows_t[pos], [user_ids[i] for i in pos], graph,
+                torch.tensor(ocean[pos], dtype=torch.float32),
+                torch.tensor(roles[pos], dtype=torch.long),
+                torch.tensor(depts[pos], dtype=torch.long),
+            )
+            for k, i in enumerate(pos):
+                by_user[user_ids[i]].append(fused[k])
 
-    embeddings = embeddings.cpu().float()
-    logger.info('Embeddings shape: %s', tuple(embeddings.shape))
-
-    # ── 5. Save in EmbeddingManager-compatible format ─────────────────────────
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    torch.save({'embeddings': embeddings, 'user_to_idx': graph.user_to_idx}, output_path)
-    logger.info('Saved GNN embeddings → %s', output_path)
-
-    return embeddings
-
-
-# ---------------------------------------------------------------------------
-# Comparison helpers
-# ---------------------------------------------------------------------------
-
-def _compare_embeddings(
-    gnn_path: str,
-    n2v_path: str,
-) -> None:
-    """Print cosine-similarity stats between GNN and Node2Vec embeddings.
-
-    Both files must have the same ``user_to_idx`` key set (same users).
-    If embedding dimensions differ the larger matrix is truncated to match
-    the smaller so the comparison is still meaningful.
-    """
-    gnn_ckpt = torch.load(gnn_path, weights_only=False)
-    n2v_ckpt = torch.load(n2v_path, weights_only=False)
-
-    gnn_emb: torch.Tensor = gnn_ckpt['embeddings'].float()   # (N, d_gnn)
-    n2v_emb: torch.Tensor = n2v_ckpt['embeddings'].float()   # (N, d_n2v)
-
-    gnn_u2i: dict = gnn_ckpt['user_to_idx']
-    n2v_u2i: dict = n2v_ckpt['user_to_idx']
-
-    # ── Align by shared user IDs ──────────────────────────────────────────────
-    shared = sorted(set(gnn_u2i) & set(n2v_u2i))
-    if not shared:
-        print('  No shared users between GNN and Node2Vec embeddings.')
-        return
-
-    gnn_rows = torch.stack([gnn_emb[gnn_u2i[u]] for u in shared])   # (M, d_gnn)
-    n2v_rows = torch.stack([n2v_emb[n2v_u2i[u]] for u in shared])   # (M, d_n2v)
-
-    d_gnn = gnn_rows.shape[1]
-    d_n2v = n2v_rows.shape[1]
-    d_min = min(d_gnn, d_n2v)
-
-    if d_gnn != d_n2v:
-        print(f'  Dimension mismatch: GNN={d_gnn}  Node2Vec={d_n2v}')
-        print(f'  Truncating to min dim={d_min} for cosine comparison.')
-        gnn_rows = gnn_rows[:, :d_min]
-        n2v_rows = n2v_rows[:, :d_min]
-
-    # Row-wise cosine similarity: cos(gnn_u, n2v_u) for each shared user
-    cos_sim = F.cosine_similarity(gnn_rows, n2v_rows, dim=1)   # (M,)
-
-    print(f'  Shared users     : {len(shared):,}')
-    print(f'  GNN dim          : {d_gnn}')
-    print(f'  Node2Vec dim     : {d_n2v}')
-    print(f'  Cosine similarity (per-user GNN vs N2V):')
-    print(f'    mean : {cos_sim.mean().item():.4f}')
-    print(f'    std  : {cos_sim.std().item():.4f}')
-    print(f'    min  : {cos_sim.min().item():.4f}')
-    print(f'    max  : {cos_sim.max().item():.4f}')
-    print()
-    print('  Interpretation:')
-    print('    Low mean similarity = methods learned different representations')
-    print('    (expected — GNN uses graph structure, N2V uses random walks)')
-    print('    Both can be useful: GNN captures relational context,')
-    print('    N2V captures co-occurrence in the user-resource graph.')
+    ordered = sorted(by_user)
+    embeddings = torch.stack([torch.stack(by_user[u]).mean(dim=0) for u in ordered])  # (N, 272)
+    return ordered, embeddings
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description='Extract GNN user embeddings and save in EmbeddingManager format.'
+        description='Extract per-user fusion embeddings and optionally sync them to Qdrant.',
     )
-    p.add_argument(
-        '--model',
-        default=os.path.join(
-            os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints'),
-            'graphsage', 'best_model.pt',
-        ),
-        metavar='PATH',
-        help='GNN checkpoint (must have model_type=graphsage)',
-    )
-    p.add_argument(
-        '--graph',
-        default=None,
-        metavar='PATH',
-        help='HeteroData graph .pt file (default: from checkpoint graphs_dir)',
-    )
-    p.add_argument(
-        '--output',
-        default=os.path.join(
-            os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints'),
-            'gnn_embeddings.pt',
-        ),
-        metavar='PATH',
-        help='Output path for embeddings (default: checkpoints/gnn_embeddings.pt)',
-    )
-    p.add_argument(
-        '--compare-n2v',
-        default=None,
-        metavar='PATH',
-        help='If given, compare GNN embeddings against Node2Vec embeddings at this path.',
-    )
-    return p.parse_args()
+    p.add_argument('--checkpoint', required=True, metavar='PATH', help='Fusion model checkpoint (.pt)')
+    p.add_argument('--version', required=True, help="CERT version string, e.g. 'r4.2'")
+    p.add_argument('--data-dir', required=True, metavar='PATH',
+                   help='Dataset directory (raw logs, LDAP, psychometric, answers/, deviations)')
+    p.add_argument('--store-dir', default='feature_store', metavar='PATH',
+                   help="Feature store directory (default: 'feature_store')")
+    p.add_argument('--output', default='embeddings.pt', metavar='PATH',
+                   help='Where to write the embeddings .pt (default: embeddings.pt)')
+    p.add_argument('--sync', action='store_true', help='Also sync embeddings to Qdrant')
+    p.add_argument('--qdrant-url', default='http://localhost:6333', metavar='URL',
+                   help="Qdrant server URL (default: 'http://localhost:6333')")
+    return p.parse_args(argv)
 
 
-# ---------------------------------------------------------------------------
-# __main__
-# ---------------------------------------------------------------------------
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    setup_logging()
+    seed_everything(42)
+
+    if not Path(args.checkpoint).exists():
+        logger.error("extract_embeddings | checkpoint not found: %s", args.checkpoint)
+        return 1
+
+    # Reconstruct the fusion model from the checkpoint config.
+    ckpt = torch.load(args.checkpoint, weights_only=True, map_location="cpu")
+    config = ckpt.get("config", {})
+    num_roles = int(config.get("num_roles", 50))
+    num_depts = int(config.get("num_depts", 15))
+
+    store = FeatureStore(args.store_dir)
+    deviations = _load_deviations(store, args.version, args.store_dir, args.data_dir)
+    if deviations is None:
+        logger.error("extract_embeddings | could not load/compute deviations for %s.", args.version)
+        return 1
+
+    answers_dir = Path(args.data_dir) / 'answers'
+    attack_windows = (
+        {r.user_id: r for r in load_insiders(answers_dir, args.version)} if answers_dir.exists() else {}
+    )
+    logger.info("extract_embeddings | loading raw logs, LDAP and psychometric …")
+    dataset_obj = load_version(args.data_dir, args.version)
+    logs, ldap, psych = dataset_obj.logs, dataset_obj.ldap, dataset_obj.psychometric
+
+    win_dataset = DeviationWindowDataset(deviations, attack_windows)
+    windows_t, user_ids, period_keys, _y, _metas = _build_window_registry(win_dataset)
+    if len(user_ids) == 0:
+        logger.error("extract_embeddings | no windows produced; nothing to extract.")
+        return 1
+
+    # Static context (same-version vocab → ids align with the trained tables).
+    role_uid, _nr = _build_id_vocab(ldap, "role")
+    dept_uid, _nd = _build_id_vocab(ldap, "department")
+    ocean_map = _build_ocean_map(psych)
+    ocean, roles, depts = _static_arrays(user_ids, ocean_map, role_uid, dept_uid)
+    roles = np.clip(roles, 0, num_roles - 1)  # guard against vocab drift
+    depts = np.clip(depts, 0, num_depts - 1)
+
+    period_graphs = _build_period_graphs(logs, period_keys, exclude_users=None)
+    metadata = next(iter(period_graphs.values())).metadata()
+
+    model = InsiderThreatDetector(metadata, num_roles=num_roles, num_depts=num_depts,
+                                  temporal_config=config.get("temporal") or None,
+                                  graph_config=config.get("graph") or None)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.to(_DEVICE)
+
+    registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys,
+                "ocean": ocean, "roles": roles, "depts": depts}
+    ordered_users, embeddings = _per_user_embeddings(model, registry, period_graphs)
+    logger.info("extract_embeddings | %d users → embeddings %s.", len(ordered_users), tuple(embeddings.shape))
+
+    # ── Save .pt in the standard checkpoint format ──────────────────────────
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "embeddings": embeddings,
+        "user_ids": ordered_users,
+        "version": args.version,
+        "metadata": {
+            "source_checkpoint": str(args.checkpoint),
+            "model": "fusion",
+            "embedding_dim": _EMBED_DIM,
+            "n_users": len(ordered_users),
+        },
+    }, output_path)
+    logger.info("extract_embeddings | saved embeddings to %s.", output_path)
+
+    # ── Optional Qdrant sync ────────────────────────────────────────────────
+    if args.sync:
+        finder = SuspectFinder(qdrant_url=args.qdrant_url)
+        if not finder.health_check():
+            logger.warning("extract_embeddings | Qdrant unreachable at %s; skipped sync.", args.qdrant_url)
+        else:
+            dept_name = ({str(r["user_id"]): str(r["department"]) for _, r in ldap.iterrows()}
+                         if ldap is not None and not ldap.empty and "department" in ldap.columns else {})
+            payloads = [
+                {"scenario": attack_windows[u].scenario if u in attack_windows else 0,
+                 "department": dept_name.get(u, ""), "score": 0.0}
+                for u in ordered_users
+            ]
+            n = finder.sync_embeddings(embeddings.numpy(), ordered_users, payloads, args.version)
+            logger.info("extract_embeddings | synced %d/%d embeddings to Qdrant.", n, len(ordered_users))
+
+    return 0
+
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    )
-
-    args = _parse_args()
-
-    DIVIDER = '=' * 60
-
-    print(f'\n{DIVIDER}')
-    print('GNN Embedding Extraction')
-    print(DIVIDER)
-    print(f'  model  : {args.model}')
-    print(f'  graph  : {args.graph or "(from checkpoint)"}')
-    print(f'  output : {args.output}')
-    print()
-
-    embeddings = extract_gnn_embeddings(
-        model_path=args.model,
-        graph_path=args.graph,
-        output_path=args.output,
-    )
-
-    print(f'\n{DIVIDER}')
-    print('Extraction results')
-    print(DIVIDER)
-    print(f'  Embedding shape : {tuple(embeddings.shape)}')
-    print(f'  dtype           : {embeddings.dtype}')
-    print(f'  norm (mean)     : {embeddings.norm(dim=1).mean().item():.4f}')
-    print(f'  norm (std)      : {embeddings.norm(dim=1).std().item():.4f}')
-    print(f'  value range     : [{embeddings.min().item():.4f}, {embeddings.max().item():.4f}]')
-
-    # ── Verify EmbeddingManager can load it ───────────────────────────────────
-    print(f'\n{DIVIDER}')
-    print('EmbeddingManager compatibility check')
-    print(DIVIDER)
-    from innersight.models.embeddings import EmbeddingManager
-
-    mgr = EmbeddingManager(args.output)
-    assert mgr.available, 'EmbeddingManager failed to load!'
-    assert mgr.embedding_dim == embeddings.shape[1], 'Dimension mismatch!'
-
-    ckpt_loaded = torch.load(args.output, weights_only=False)
-    user_to_idx = ckpt_loaded['user_to_idx']
-    sample_users = list(user_to_idx.keys())[:5]
-
-    print(f'  available      : {mgr.available}')
-    print(f'  embedding_dim  : {mgr.embedding_dim}')
-    print(f'  users in graph : {len(user_to_idx):,}')
-    print(f'  sample users   : {sample_users}')
-
-    aligned = mgr.align_embeddings(sample_users)
-    print(f'  align_embeddings({len(sample_users)} users) shape: {tuple(aligned.shape)}')
-    print('  EmbeddingManager: OK')
-
-    # ── Compare with Node2Vec (if requested / auto-detect) ────────────────────
-    model_dir = os.environ.get('INNERSIGHT_MODEL_DIR', 'checkpoints')
-    n2v_path  = args.compare_n2v or os.path.join(model_dir, 'node2vec_embeddings.pt')
-
-    if os.path.exists(n2v_path):
-        print(f'\n{DIVIDER}')
-        print(f'Comparison: GNN vs Node2Vec')
-        print(f'  Node2Vec file: {n2v_path}')
-        print(DIVIDER)
-        _compare_embeddings(args.output, n2v_path)
-    else:
-        print(f'\n  (Node2Vec embeddings not found at {n2v_path} — skipping comparison)')
+    sys.exit(main())
