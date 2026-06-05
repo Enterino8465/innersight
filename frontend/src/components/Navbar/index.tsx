@@ -7,6 +7,8 @@ const Navbar: React.FC = () => (
     <SLinks>
       <SNavLink to="/alerts">Alerts</SNavLink>
       <SNavLink to="/employees">Employees</SNavLink>
+      <SNavLink to="/suspects">Suspects</SNavLink>
+      <SNavLink to="/models">Models</SNavLink>
       <SNavLink to="/training">Training</SNavLink>
     </SLinks>
   </SNav>

@@ -8,6 +8,8 @@ import AlertsPage from './pages/Alerts'
 import EmployeesPage from './pages/Employees'
 import InvestigationPage from './pages/Investigation'
 import TrainingPage from './pages/Training'
+import SuspectDiscoveryPage from './pages/SuspectDiscovery'
+import ModelComparisonPage from './pages/ModelComparison'
 import NotFound from './pages/NotFound'
 
 const App: React.FC = () => (
@@ -21,6 +23,8 @@ const App: React.FC = () => (
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/employee/:userId" element={<InvestigationPage />} />
         <Route path="/training" element={<TrainingPage />} />
+        <Route path="/suspects" element={<SuspectDiscoveryPage />} />
+        <Route path="/models" element={<ModelComparisonPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

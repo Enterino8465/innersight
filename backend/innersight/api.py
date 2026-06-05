@@ -611,5 +611,61 @@ def get_similar_users(user_id):
     return jsonify({'similar_users': similar})
 
 
+# ── Model comparison (progressive ladder) ────────────────────────────────────
+
+_LADDER = (
+    ('XGBoost',        'xgboost_results.json'),
+    ('MLP',            'mlp_results.json'),
+    ('Temporal CNN',   'temporal_results.json'),
+    ('Temporal+Graph', 'temporal_graph_results.json'),
+    ('Fusion',         'fusion_results.json'),
+)
+
+
+def _finite(value):
+    """Return a JSON-safe number (None for missing/NaN so the frontend can parse)."""
+    if isinstance(value, (int, float)) and value == value:  # NaN != NaN
+        return value
+    return None
+
+
+@app.get('/api/models/compare')
+def get_model_comparison():
+    """Return the progressive-ladder comparison from the Phase 3-6 result JSONs.
+
+    Reads results from INNERSIGHT_RESULTS_DIR (default: the model dir). Models
+    whose results JSON is absent are simply omitted, so this works pre-training.
+    """
+    import json
+
+    results_dir = os.environ.get('INNERSIGHT_RESULTS_DIR', MODEL_DIR)
+    ladder = []
+    per_scenario = {}
+    for label, fname in _LADDER:
+        path = os.path.join(results_dir, fname)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except (ValueError, OSError):
+            continue
+        cv = data.get('cross_validation', {})
+        mean = cv.get('mean', {})
+        std = cv.get('std', {})
+        ladder.append({
+            'model':       label,
+            'auprc':       _finite(mean.get('auprc')),
+            'auprc_std':   _finite(std.get('auprc')),
+            'p_at_10':     _finite(mean.get('p_at_10')),
+            'p_at_20':     _finite(mean.get('p_at_20')),
+            'f1':          _finite(mean.get('f1_best')),
+            'median_days': _finite(mean.get('median_days')),
+        })
+        if data.get('per_scenario'):
+            per_scenario[label] = data['per_scenario']
+    return jsonify({'ladder': ladder, 'per_scenario': per_scenario, 'results_dir': results_dir})
+
+
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
