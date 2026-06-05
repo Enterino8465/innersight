@@ -12,10 +12,11 @@ build/
 # Env
 .env
 
-# Data & ML artifacts (too large for git)
-data/
-# ...but backend/data/ is the source package, not a data artifact — keep it tracked.
-!backend/data/
+# Data & ML artifacts (too large for git). Ignore the CONTENTS of the repo-root
+# data/ (anchored, so git can still descend) — but keep the small synthetic demo
+# dataset, which is intentional and powers demo mode.
+/data/*
+!/data/synthetic_demo/
 ml/experiments/
 ml/models/
 

@@ -1,0 +1,6 @@
+employee_name,user_id,email,role,department
+Aaron Smith,DEMO001,demo001@dtaa.com,Salesman,Sales
+Beth Jones,DEMO002,demo002@dtaa.com,Technician,Operations
+Carl Brown,DEMO003,demo003@dtaa.com,ITAdmin,InformationTechnology
+Dana Davis,DEMO004,demo004@dtaa.com,Salesman,Sales
+Evan Wilson,DEMO_INS01,demo_ins01@dtaa.com,Technician,Operations

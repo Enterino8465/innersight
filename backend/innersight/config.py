@@ -9,7 +9,15 @@ import logging
 import os
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_DIR  = os.environ.get('INNERSIGHT_DATA_DIR',   '')
+# Bundled synthetic demo dataset (repo-root data/synthetic_demo). Used as a
+# fallback so `docker-compose up` with no env vars boots into a working demo.
+# config.py is backend/innersight/config.py → three dirnames reach the repo root.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEMO_DATA_DIR = os.environ.get(
+    'INNERSIGHT_DEMO_DATA_DIR', os.path.join(_REPO_ROOT, 'data', 'synthetic_demo'))
+
+# Real data directory if INNERSIGHT_DATA_DIR is set; otherwise the synthetic demo.
+DATA_DIR  = os.environ.get('INNERSIGHT_DATA_DIR', '') or DEMO_DATA_DIR
 MODEL_DIR = os.environ.get('INNERSIGHT_MODEL_DIR',  'checkpoints')
 
 ALERTS_FILE       = os.path.join(MODEL_DIR, 'alerts.json')

@@ -1,0 +1,8 @@
+id,date,user,pc,filename,content
+F0001,2010-01-06 10:00:00,DEMO002,PC-002,manual.pdf,doc content
+F0002,2010-01-11 23:50:00,DEMO_INS01,PC-005,customer_list.xlsx,sensitive content
+F0003,2010-01-11 23:50:00,DEMO_INS01,PC-005,roadmap.docx,sensitive content
+F0004,2010-01-12 23:50:00,DEMO_INS01,PC-005,customer_list.xlsx,sensitive content
+F0005,2010-01-12 23:50:00,DEMO_INS01,PC-005,roadmap.docx,sensitive content
+F0006,2010-01-13 23:50:00,DEMO_INS01,PC-005,customer_list.xlsx,sensitive content
+F0007,2010-01-13 23:50:00,DEMO_INS01,PC-005,roadmap.docx,sensitive content

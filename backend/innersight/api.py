@@ -36,7 +36,7 @@ from innersight.training.trainer import train as run_train
 from innersight.scoring.scoring import load_alerts
 from innersight.feedback.feedback import apply_learn, apply_mute, apply_block
 from innersight.config import (
-    DATA_DIR, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
+    DATA_DIR, DEMO_DATA_DIR, MODEL_DIR, ALERTS_FILE, BEST_MODEL_PT_FILE, STANDARDIZER_FILE,
     FEATURE_COLS, DEFAULT_TRAINING_CONFIG, setup_logging,
 )
 from innersight.models.mlp import InsiderThreatMLP, get_device
@@ -62,8 +62,80 @@ def _get_suspect_finder():
         _suspect_finder = SuspectFinder(qdrant_url=qdrant_url)
     return _suspect_finder
 
+
+# ── Demo mode ─────────────────────────────────────────────────────────────────
+# When no real data dir is configured the app falls back to the bundled
+# synthetic dataset; on the first request we compute baselines and surface a few
+# demo alerts so `docker-compose up` (no env vars) yields a working UI.
+_demo_initialized = False
+
+
+def _generate_demo_alerts():
+    """Turn the demo deviations into a handful of alerts (no trained model needed)."""
+    import json
+    import uuid
+    from datetime import datetime, timezone
+
+    import numpy as np
+
+    from innersight.data.feature_store import FeatureStore
+    from innersight.schema import FEATURE_NAMES
+
+    deviations = FeatureStore(MODEL_DIR).load_deviations('r4.2')
+    if deviations is None or deviations.empty:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    alerts = []
+    for _, row in deviations.iterrows():
+        z = np.abs(row[FEATURE_NAMES].to_numpy(dtype=float))
+        score = float(min(1.0, z.mean() / 3.0))   # normalise mean |z| into ~[0, 1]
+        if score < 0.3:
+            continue
+        top = sorted(zip(FEATURE_NAMES, z), key=lambda kv: kv[1], reverse=True)[:3]
+        alerts.append({
+            'id':           str(uuid.uuid4()),
+            'user':         str(row['user']),
+            'date':         str(row['date']),
+            'score':        round(score, 4),
+            'status':       'open',
+            'created_at':   now,
+            'top_features': [{'feature': f, 'value': round(float(v), 3)} for f, v in top],
+        })
+    with open(ALERTS_FILE, 'w') as fh:
+        json.dump(alerts, fh, indent=2, default=str)
+    logger.info('DEMO MODE | generated %d demo alerts.', len(alerts))
+
+
+def _ensure_demo_mode():
+    """Run once: if using the synthetic demo data, compute baselines + alerts."""
+    global _demo_initialized
+    if _demo_initialized:
+        return
+    _demo_initialized = True  # set first so a failure doesn't retry every request
+    import sys
+    if 'pytest' in sys.modules:
+        return  # never auto-compute during the test suite (avoids side effects)
+    if os.path.abspath(DATA_DIR) != os.path.abspath(DEMO_DATA_DIR):
+        return
+    logger.info('Running in DEMO MODE with synthetic data (%s)', DEMO_DATA_DIR)
+    try:
+        from innersight.scripts import compute_baselines
+        compute_baselines.main(
+            ['--version', 'r4.2', '--data-dir', DEMO_DATA_DIR, '--store-dir', MODEL_DIR])
+        _generate_demo_alerts()
+    except Exception as exc:   # demo setup must never crash the app
+        logger.warning('DEMO MODE | initialization failed: %s', exc)
+
+
 app = Flask(__name__)
 CORS(app, origins=['http://localhost:3000', 'http://localhost:5173'])
+
+
+@app.before_request
+def _demo_before_request():
+    """Initialise demo mode on the first request (no-op once done / not in demo)."""
+    _ensure_demo_mode()
+
 
 _event_queue: queue_module.Queue = queue_module.Queue()
 
