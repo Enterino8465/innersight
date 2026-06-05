@@ -34,6 +34,9 @@ from innersight.config import (
     JOB_KEYWORDS,
     CLOUD_KEYWORDS,
     INTERNAL_DOMAIN,
+    CERT_JOB_DOMAINS,
+    CERT_CLOUD_DOMAINS,
+    CERT_KEYLOGGER_DOMAINS,
 )
 from innersight.models.graph_schema import (
     USER_FEATURE_DIM,
@@ -59,6 +62,12 @@ from innersight.models.graph_schema import (
     NODE_PC,
     NODE_URL,
     NODE_FILE,
+    USER_TEMPORAL_DIM,
+    WINDOWED_LOGON_EDGE_DIM,
+    WINDOWED_USB_EDGE_DIM,
+    WINDOWED_EMAIL_EDGE_DIM,
+    WINDOWED_HTTP_EDGE_DIM,
+    WINDOWED_FILE_EDGE_DIM,
 )
 
 logger = logging.getLogger(__name__)
@@ -1679,6 +1688,438 @@ def load_temporal_graphs() -> dict:
         t0 = _time.perf_counter()
         graphs[split] = torch.load(path, weights_only=False)
         logger.info('Loaded %s in %.2fs', split, _time.perf_counter() - t0)
+    return graphs
+
+
+# ── Windowed graph construction (Phase 5) ─────────────────────────────────────
+# build_windowed_graph aggregates raw events over one time window into a single
+# HeteroData graph with summary edge features — distinct from the per-event
+# builders above, which the legacy temporal-graph pipeline still uses. User node
+# features are left as zeros: Module 2's temporal embeddings are injected at
+# training time.
+
+def _win_prepare(df):
+    """Datetime-normalise a log DataFrame, or None if it is unusable."""
+    if df is None or len(df) == 0 or 'date' not in df.columns:
+        return None
+    return _ensure_datetime(df)
+
+
+def _win_slice(df, start, end):
+    """Rows with start <= date <= end (inclusive), or None if empty."""
+    if df is None:
+        return None
+    sub = df[(df['date'] >= start) & (df['date'] <= end)]
+    return sub if len(sub) else None
+
+
+def _win_flags(df):
+    """Add per-row _hour / _after / _weekend / _day helper columns."""
+    df = df.copy()
+    h = df['date'].dt.hour
+    df['_hour'] = h.astype(float)
+    df['_after'] = ((h < BUSINESS_HOURS_START) | (h >= BUSINESS_HOURS_END)).astype(float)
+    df['_weekend'] = (df['date'].dt.dayofweek >= 5).astype(float)
+    df['_day'] = df['date'].dt.normalize()
+    return df
+
+
+def _win_max_burst(df, keys):
+    """Max single-day event count per group, as a Series indexed by *keys*."""
+    daily = df.groupby(keys + ['_day']).size()
+    return daily.groupby(level=list(range(len(keys)))).max()
+
+
+def _win_prior_pairs(df, left, right):
+    """Set of (left, right) string pairs present in a prior-window DataFrame."""
+    if df is None or len(df) == 0 or left not in df.columns or right not in df.columns:
+        return set()
+    pairs = df[[left, right]].dropna()
+    return set(map(tuple, pairs.astype(str).to_numpy()))
+
+
+def _win_domain_flag(domain, keywords):
+    """1.0 if *domain* matches any keyword/substring, else 0.0."""
+    return 1.0 if any(k in domain for k in keywords) else 0.0
+
+
+def _win_to_removable(df):
+    """Boolean Series: did each file event target removable media?
+
+    r5+ logs carry a ``to_removable_media`` flag; r3-4 file logs record only
+    removable-media copies, so every row counts as removable there.
+    """
+    if 'to_removable_media' in df.columns:
+        return df['to_removable_media'].astype(str).str.lower().isin(('true', '1'))
+    return pd.Series(True, index=df.index)
+
+
+def _win_empty_edge(dim):
+    """Empty (edge_index, edge_attr) pair for an edge type with *dim* features."""
+    return torch.zeros(2, 0, dtype=torch.long), torch.zeros(0, dim, dtype=torch.float32)
+
+
+def _win_pairs_to_edges(agg, cols, src_map, dst_map):
+    """Map an (src_key, dst_key)-indexed aggregate frame to edge tensors."""
+    if agg is None or len(agg) == 0:
+        return _win_empty_edge(len(cols))
+    src = [src_map[k] for k in agg.index.get_level_values(0)]
+    dst = [dst_map[k] for k in agg.index.get_level_values(1)]
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    edge_attr = torch.tensor(agg[cols].to_numpy(dtype='float32'), dtype=torch.float32)
+    return edge_index, edge_attr
+
+
+def _win_email_recipient_ids(email_w):
+    """Internal email recipients (local-part == user_id) appearing in the window."""
+    ids: set[str] = set()
+    suffix = f'@{INTERNAL_DOMAIN.lower()}'
+    for col in ('to', 'cc', 'bcc'):
+        if col not in email_w.columns:
+            continue
+        for raw in email_w[col].fillna('').astype(str).str.lower():
+            for addr in raw.split(';'):
+                addr = addr.strip()
+                if addr.endswith(suffix):
+                    ids.add(addr.split('@')[0])
+    return ids
+
+
+# ── Windowed node features ────────────────────────────────────────────────────
+
+def _win_pc_features(logon_w, device_w, pc_to_idx):
+    """PC node features (8): users, after-hours, shared, logons, usb, weekend, hour stats."""
+    n = len(pc_to_idx)
+    if n == 0:
+        return torch.zeros((0, 8), dtype=torch.float32)
+    parts = []
+    if logon_w is not None and 'pc' in logon_w.columns:
+        d = _win_flags(logon_w)
+        d = d.assign(_is_logon=(d['activity'].astype(str).str.lower() == 'logon').astype(float),
+                     _is_usb=0.0)
+        parts.append(d[['pc', 'user', '_hour', '_after', '_weekend', '_is_logon', '_is_usb']])
+    if device_w is not None and 'pc' in device_w.columns:
+        d = _win_flags(device_w)
+        d = d.assign(_is_logon=0.0,
+                     _is_usb=(d['activity'].astype(str).str.lower() == 'connect').astype(float))
+        parts.append(d[['pc', 'user', '_hour', '_after', '_weekend', '_is_logon', '_is_usb']])
+    feats = np.zeros((n, 8), dtype='float32')
+    if not parts:
+        return torch.tensor(feats, dtype=torch.float32)
+
+    ev = pd.concat(parts, ignore_index=True)
+    ev = ev[ev['pc'].notna()].copy()
+    ev['pc'] = ev['pc'].astype(str)
+    g = ev.groupby('pc')
+    agg = pd.DataFrame({
+        'num_users': g['user'].nunique(),
+        'after_hours_ratio': g['_after'].mean(),
+        'total_logons': g['_is_logon'].sum(),
+        'total_usb': g['_is_usb'].sum(),
+        'weekend_ratio': g['_weekend'].mean(),
+        'mean_hour': g['_hour'].mean(),
+        'std_hour': g['_hour'].std().fillna(0.0),
+    })
+    agg['is_shared'] = (agg['num_users'] > 1).astype(float)
+    for pc, i in pc_to_idx.items():
+        if pc in agg.index:
+            r = agg.loc[pc]
+            feats[i] = [r['num_users'], r['after_hours_ratio'], r['is_shared'], r['total_logons'],
+                        r['total_usb'], r['weekend_ratio'], r['mean_hour'], r['std_hour']]
+    return torch.tensor(feats, dtype=torch.float32)
+
+
+def _win_url_features(http_w, url_to_idx):
+    """URL node features (8): visits, visitors, site flags, after-hours, hour, concentration."""
+    n = len(url_to_idx)
+    if n == 0:
+        return torch.zeros((0, 8), dtype=torch.float32)
+    feats = np.zeros((n, 8), dtype='float32')
+    if http_w is None:
+        return torch.tensor(feats, dtype=torch.float32)
+    d = _win_flags(http_w)
+    g = d.groupby('_domain')
+    agg = pd.DataFrame({
+        'visit_count': g.size(),
+        'unique_visitors': g['user'].nunique(),
+        'after_hours_ratio': g['_after'].mean(),
+        'mean_hour': g['_hour'].mean(),
+    })
+    top_visitor = d.groupby(['_domain', 'user']).size().groupby(level=0).max()
+    agg['concentration'] = (top_visitor / agg['visit_count']).fillna(0.0)
+    for dom, i in url_to_idx.items():
+        if dom in agg.index:
+            r = agg.loc[dom]
+            feats[i] = [r['visit_count'], r['unique_visitors'],
+                        _win_domain_flag(dom, CERT_JOB_DOMAINS),
+                        _win_domain_flag(dom, CERT_CLOUD_DOMAINS),
+                        _win_domain_flag(dom, CERT_KEYLOGGER_DOMAINS),
+                        r['after_hours_ratio'], r['mean_hour'], r['concentration']]
+    return torch.tensor(feats, dtype=torch.float32)
+
+
+def _win_file_features(file_w, file_p, file_to_idx):
+    """File node features (6): copies, copiers, is_decoy, removable, after-hours, is_new."""
+    n = len(file_to_idx)
+    if n == 0:
+        return torch.zeros((0, 6), dtype=torch.float32)
+    feats = np.zeros((n, 6), dtype='float32')
+    if file_w is None or 'filename' not in file_w.columns:
+        return torch.tensor(feats, dtype=torch.float32)
+    d = _win_flags(file_w)
+    d['_torem'] = _win_to_removable(d).astype(float)
+    d['filename'] = d['filename'].astype(str)
+    g = d.groupby('filename')
+    agg = pd.DataFrame({
+        'copy_count': g.size(),
+        'unique_copiers': g['user'].nunique(),
+        'to_removable_count': g['_torem'].sum(),
+        'after_hours_ratio': g['_after'].mean(),
+    })
+    prior_files = set(file_p['filename'].astype(str)) if (
+        file_p is not None and 'filename' in file_p.columns) else set()
+    for fn, i in file_to_idx.items():
+        if fn in agg.index:
+            r = agg.loc[fn]
+            # is_decoy needs the decoy registry (not in the logs) → left as 0.0.
+            feats[i] = [r['copy_count'], r['unique_copiers'], 0.0,
+                        r['to_removable_count'], r['after_hours_ratio'],
+                        0.0 if fn in prior_files else 1.0]
+    return torch.tensor(feats, dtype=torch.float32)
+
+
+# ── Windowed edge builders ────────────────────────────────────────────────────
+
+def _win_logon_edges(logon_w, user_to_idx, pc_to_idx):
+    cols = ['count', 'frac_after_hours', 'frac_weekend', 'mean_hour', 'max_burst_day']
+    if logon_w is None or 'activity' not in logon_w.columns:
+        return _win_empty_edge(WINDOWED_LOGON_EDGE_DIM)
+    d = logon_w[logon_w['activity'].astype(str).str.lower() == 'logon']
+    if len(d) == 0:
+        return _win_empty_edge(WINDOWED_LOGON_EDGE_DIM)
+    d = _win_flags(d)
+    d['user'] = d['user'].astype(str)
+    d['pc'] = d['pc'].astype(str)
+    g = d.groupby(['user', 'pc'])
+    agg = pd.DataFrame({
+        'count': g.size(),
+        'frac_after_hours': g['_after'].mean(),
+        'frac_weekend': g['_weekend'].mean(),
+        'mean_hour': g['_hour'].mean(),
+    })
+    agg['max_burst_day'] = _win_max_burst(d, ['user', 'pc'])
+    return _win_pairs_to_edges(agg, cols, user_to_idx, pc_to_idx)
+
+
+def _win_usb_edges(device_w, logon_p, device_p, user_to_idx, pc_to_idx):
+    cols = ['count', 'frac_after_hours', 'max_burst_day', 'is_new_pc']
+    if device_w is None or 'activity' not in device_w.columns:
+        return _win_empty_edge(WINDOWED_USB_EDGE_DIM)
+    d = device_w[device_w['activity'].astype(str).str.lower() == 'connect']
+    if len(d) == 0:
+        return _win_empty_edge(WINDOWED_USB_EDGE_DIM)
+    d = _win_flags(d)
+    d['user'] = d['user'].astype(str)
+    d['pc'] = d['pc'].astype(str)
+    g = d.groupby(['user', 'pc'])
+    agg = pd.DataFrame({
+        'count': g.size(),
+        'frac_after_hours': g['_after'].mean(),
+    })
+    agg['max_burst_day'] = _win_max_burst(d, ['user', 'pc'])
+    prior = _win_prior_pairs(logon_p, 'user', 'pc') | _win_prior_pairs(device_p, 'user', 'pc')
+    agg['is_new_pc'] = [0.0 if (str(u), str(p)) in prior else 1.0 for u, p in agg.index]
+    return _win_pairs_to_edges(agg, cols, user_to_idx, pc_to_idx)
+
+
+def _win_email_edges(email_w, user_to_idx):
+    cols = ['count', 'mean_size', 'max_attachments', 'frac_after_hours', 'is_external']
+    if email_w is None:
+        return _win_empty_edge(WINDOWED_EMAIL_EDGE_DIM)
+    ex = _explode_and_map_recipients(email_w, user_to_idx)
+    if ex is None or len(ex) == 0:
+        return _win_empty_edge(WINDOWED_EMAIL_EDGE_DIM)
+    g = ex.groupby(['_sender_idx', '_recip_idx'])
+    agg = pd.DataFrame({
+        'count': g.size(),
+        'mean_size': g['_size'].mean(),
+        'max_attachments': g['_attach'].max(),
+        'frac_after_hours': g['_is_after'].mean(),
+        'is_external': g['_is_external'].mean(),
+    })
+    src = [int(s) for s in agg.index.get_level_values(0)]
+    dst = [int(s) for s in agg.index.get_level_values(1)]
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    edge_attr = torch.tensor(agg[cols].to_numpy(dtype='float32'), dtype=torch.float32)
+    return edge_index, edge_attr
+
+
+def _win_http_edges(http_w, http_p, user_to_idx, url_to_idx):
+    cols = ['count', 'frac_after_hours', 'is_new_domain', 'visit_concentration']
+    if http_w is None:
+        return _win_empty_edge(WINDOWED_HTTP_EDGE_DIM)
+    d = _win_flags(http_w)
+    d['user'] = d['user'].astype(str)
+    g = d.groupby(['user', '_domain'])
+    agg = pd.DataFrame({
+        'count': g.size(),
+        'frac_after_hours': g['_after'].mean(),
+    })
+    burst = _win_max_burst(d, ['user', '_domain'])
+    agg['visit_concentration'] = (burst / agg['count']).fillna(0.0)
+    prior = _win_prior_pairs(http_p, 'user', '_domain')
+    agg['is_new_domain'] = [0.0 if (str(u), str(dom)) in prior else 1.0 for u, dom in agg.index]
+    return _win_pairs_to_edges(agg, cols, user_to_idx, url_to_idx)
+
+
+def _win_file_edges(file_w, file_p, user_to_idx, file_to_idx):
+    cols = ['count', 'frac_after_hours', 'frac_to_removable', 'is_new_file']
+    if file_w is None or 'filename' not in file_w.columns:
+        return _win_empty_edge(WINDOWED_FILE_EDGE_DIM)
+    d = _win_flags(file_w)
+    d['_torem'] = _win_to_removable(d).astype(float)
+    d['user'] = d['user'].astype(str)
+    d['filename'] = d['filename'].astype(str)
+    g = d.groupby(['user', 'filename'])
+    agg = pd.DataFrame({
+        'count': g.size(),
+        'frac_after_hours': g['_after'].mean(),
+        'frac_to_removable': g['_torem'].mean(),
+    })
+    prior = _win_prior_pairs(file_p, 'user', 'filename')
+    agg['is_new_file'] = [0.0 if (str(u), str(f)) in prior else 1.0 for u, f in agg.index]
+    return _win_pairs_to_edges(agg, cols, user_to_idx, file_to_idx)
+
+
+def build_windowed_graph(logs, window_start, window_end, prior_days=60):
+    """Build a PyG HeteroData graph for one time window with aggregated edges.
+
+    Only events with ``window_start <= date <= window_end`` are included. For
+    each unique (user, entity) pair, all events in the window collapse into a
+    single edge whose features summarise the interaction (count, after-hours
+    fraction, burst, novelty, …). ``is_new`` flags compare against the
+    ``prior_days`` immediately before the window. Raw CERT log DataFrames are
+    consumed (not deviation matrices); missing log types are handled gracefully.
+
+    Args:
+        logs: Mapping of log name → DataFrame (as in ``CertDataset.logs``).
+        window_start: Inclusive window start (timestamp-like).
+        window_end: Inclusive window end (timestamp-like).
+        prior_days: Days before the window scanned to flag new connections.
+
+    Returns:
+        A ``HeteroData`` with user/pc/url/file nodes, the five forward edge types
+        and their reverses, and ``user_to_idx`` / ``pc_to_idx`` / ``url_to_idx``
+        / ``file_to_idx`` attributes for aligning injected user embeddings.
+    """
+    ws = pd.Timestamp(window_start)
+    we = pd.Timestamp(window_end)
+    prior_start = ws - pd.Timedelta(days=prior_days)
+    prior_end = ws - pd.Timedelta(seconds=1)  # strictly before the window
+
+    logon = _win_prepare(logs.get('logon'))
+    device = _win_prepare(logs.get('device'))
+    email = _win_prepare(logs.get('email'))
+    http = _win_prepare(logs.get('http'))
+    file = _win_prepare(logs.get('file'))
+
+    logon_w = _win_slice(logon, ws, we)
+    device_w = _win_slice(device, ws, we)
+    email_w = _win_slice(email, ws, we)
+    http_w = _win_slice(http, ws, we)
+    file_w = _win_slice(file, ws, we)
+
+    logon_p = _win_slice(logon, prior_start, prior_end)
+    device_p = _win_slice(device, prior_start, prior_end)
+    http_p = _win_slice(http, prior_start, prior_end)
+    file_p = _win_slice(file, prior_start, prior_end)
+
+    # Resolve URLs to domains once (used for both nodes and edges).
+    if http_w is not None:
+        http_w = http_w.copy()
+        http_w['_domain'] = http_w['url'].apply(_extract_domain)
+    if http_p is not None:
+        http_p = http_p.copy()
+        http_p['_domain'] = http_p['url'].apply(_extract_domain)
+
+    # ── Node sets ──
+    users: set[str] = set()
+    for df in (logon_w, device_w, email_w, http_w, file_w):
+        if df is not None and 'user' in df.columns:
+            users.update(df['user'].dropna().astype(str))
+    if email_w is not None:
+        users.update(_win_email_recipient_ids(email_w))
+    pcs: set[str] = set()
+    for df in (logon_w, device_w):
+        if df is not None and 'pc' in df.columns:
+            pcs.update(df['pc'].dropna().astype(str))
+    urls = set(http_w['_domain'].dropna().astype(str)) if http_w is not None else set()
+    files = set(file_w['filename'].dropna().astype(str)) if (
+        file_w is not None and 'filename' in file_w.columns) else set()
+
+    user_to_idx = {u: i for i, u in enumerate(sorted(users))}
+    pc_to_idx = {p: i for i, p in enumerate(sorted(pcs))}
+    url_to_idx = {u: i for i, u in enumerate(sorted(urls))}
+    file_to_idx = {f: i for i, f in enumerate(sorted(files))}
+
+    data = HeteroData()
+    data[NODE_USER].x = torch.zeros(len(user_to_idx), USER_TEMPORAL_DIM, dtype=torch.float32)
+    data[NODE_PC].x = _win_pc_features(logon_w, device_w, pc_to_idx)
+    data[NODE_URL].x = _win_url_features(http_w, url_to_idx)
+    data[NODE_FILE].x = _win_file_features(file_w, file_p, file_to_idx)
+
+    edges = (
+        (EDGE_LOGON, REV_EDGE_LOGON, _win_logon_edges(logon_w, user_to_idx, pc_to_idx)),
+        (EDGE_USB, REV_EDGE_USB, _win_usb_edges(device_w, logon_p, device_p, user_to_idx, pc_to_idx)),
+        (EDGE_EMAIL, REV_EDGE_EMAIL, _win_email_edges(email_w, user_to_idx)),
+        (EDGE_HTTP, REV_EDGE_HTTP, _win_http_edges(http_w, http_p, user_to_idx, url_to_idx)),
+        (EDGE_FILE_COPY, REV_EDGE_FILE_COPY, _win_file_edges(file_w, file_p, user_to_idx, file_to_idx)),
+    )
+    for etype, rev, (edge_index, edge_attr) in edges:
+        data[etype].edge_index = edge_index
+        data[etype].edge_attr = edge_attr
+        data[rev].edge_index = edge_index.flip(0)
+        data[rev].edge_attr = edge_attr
+
+    # Index maps for aligning injected temporal embeddings with node rows.
+    data.user_to_idx = user_to_idx
+    data.pc_to_idx = pc_to_idx
+    data.url_to_idx = url_to_idx
+    data.file_to_idx = file_to_idx
+    data.window_start = ws
+    data.window_end = we
+    return data
+
+
+def build_graphs_for_dataset(dataset, window_size=28, stride=7):
+    """Slide windows across a dataset's date range, one HeteroData graph per window.
+
+    Args:
+        dataset: A ``CertDataset`` (uses ``dataset.logs``).
+        window_size: Window length in days.
+        stride: Days to advance between consecutive windows.
+
+    Returns:
+        List of ``HeteroData`` graphs, one per window (empty if no dated logs).
+    """
+    logs = dataset.logs
+    bounds = []
+    for df in logs.values():
+        if df is not None and len(df) and 'date' in df.columns:
+            dates = pd.to_datetime(df['date'])
+            bounds.append((dates.min(), dates.max()))
+    if not bounds:
+        return []
+    min_date = min(b[0] for b in bounds).normalize()
+    max_date = max(b[1] for b in bounds)
+
+    span = pd.Timedelta(days=window_size - 1)
+    step = pd.Timedelta(days=stride)
+    graphs = []
+    start = min_date
+    while start + span <= max_date:
+        graphs.append(build_windowed_graph(logs, start, start + span))
+        start += step
     return graphs
 
 

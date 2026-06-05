@@ -175,6 +175,48 @@ EDGE_FEATURE_DIMS: dict[tuple[str, str, str], int] = {
 Reverse edges carry the same features as their forward counterpart."""
 
 
+# ── Windowed graph dimensions (Phase 5) ──────────────────────────────────────
+# The windowed builder (build_windowed_graph) uses AGGREGATED edge features over
+# a time window, so its edge dims differ from the per-event dims above. These
+# constants are separate so legacy per-event code keeps its original schema.
+
+USER_TEMPORAL_DIM = 128
+"""User node features in the windowed graph are temporal embeddings (Module 2),
+injected at training time rather than computed by the graph builder."""
+
+WINDOWED_NODE_FEATURE_DIMS: dict[str, int] = {
+    NODE_USER: USER_TEMPORAL_DIM,  # injected temporal embedding
+    NODE_PC:   8,
+    NODE_URL:  8,
+    NODE_FILE: 6,
+}
+"""Node feature dims for the windowed graph (user = injected embedding)."""
+
+WINDOWED_LOGON_EDGE_DIM = 5
+"""Aggregated logon edge: count, frac_after_hours, frac_weekend, mean_hour, max_burst_day."""
+
+WINDOWED_USB_EDGE_DIM = 4
+"""Aggregated USB edge: count, frac_after_hours, max_burst_day, is_new_pc."""
+
+WINDOWED_EMAIL_EDGE_DIM = 5
+"""Aggregated email edge: count, mean_size, max_attachments, frac_after_hours, is_external."""
+
+WINDOWED_HTTP_EDGE_DIM = 4
+"""Aggregated http edge: count, frac_after_hours, is_new_domain, visit_concentration."""
+
+WINDOWED_FILE_EDGE_DIM = 4
+"""Aggregated file-copy edge: count, frac_after_hours, frac_to_removable, is_new_file."""
+
+WINDOWED_EDGE_FEATURE_DIMS: dict[tuple[str, str, str], int] = {
+    EDGE_LOGON:     WINDOWED_LOGON_EDGE_DIM,
+    EDGE_USB:       WINDOWED_USB_EDGE_DIM,
+    EDGE_EMAIL:     WINDOWED_EMAIL_EDGE_DIM,
+    EDGE_HTTP:      WINDOWED_HTTP_EDGE_DIM,
+    EDGE_FILE_COPY: WINDOWED_FILE_EDGE_DIM,
+}
+"""Map from forward edge type → aggregated (windowed) edge feature length."""
+
+
 # ── Schema summary ────────────────────────────────────────────────────────────
 
 def print_schema() -> None:
