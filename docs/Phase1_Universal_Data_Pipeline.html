@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InnerSight — Phase 1: Universal Data Pipeline</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --accent: #2b6cb0;
+    --light-bg: #ebf4ff;
+    --border: #bee3f8;
+    --text: #1a202c;
+    --muted: #4a5568;
+    --success: #276749;
+    --success-bg: #f0fff4;
+    --warning: #744210;
+    --warning-bg: #fffff0;
+    --danger: #9b2c2c;
+    --danger-bg: #fff5f5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Georgia', serif; color: var(--text); line-height: 1.7; max-width: 920px; margin: 0 auto; padding: 40px 30px; background: #fff; }
+  h1 { font-size: 2.2em; color: var(--primary); margin-bottom: 0.2em; }
+  h2 { font-size: 1.6em; color: var(--primary); margin-top: 2.5em; margin-bottom: 0.5em; border-bottom: 2px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 1.25em; color: var(--accent); margin-top: 1.5em; margin-bottom: 0.4em; }
+  h4 { font-size: 1.05em; color: var(--muted); margin-top: 1.2em; margin-bottom: 0.3em; }
+  p { margin-bottom: 1em; }
+  .box { border-radius: 8px; padding: 20px; margin: 1.5em 0; }
+  .box-problem { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+  .box-solution { background: var(--success-bg); border-left: 4px solid var(--success); }
+  .box-why { background: var(--warning-bg); border-left: 4px solid var(--warning); }
+  .box-info { background: var(--light-bg); border-left: 4px solid var(--accent); }
+  .box h4 { margin-top: 0; font-weight: bold; }
+  .box-problem h4 { color: var(--danger); }
+  .box-solution h4 { color: var(--success); }
+  .box-why h4 { color: var(--warning); }
+  .box-info h4 { color: var(--accent); }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; background: #edf2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.88em; }
+  pre { background: #1a202c; color: #e2e8f0; padding: 20px; border-radius: 8px; overflow-x: auto; margin: 1em 0; font-size: 0.82em; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5em 0; font-size: 0.9em; }
+  th, td { border: 1px solid #e2e8f0; padding: 10px 14px; text-align: left; }
+  th { background: var(--primary); color: white; font-weight: 600; }
+  tr:nth-child(even) { background: #f7fafc; }
+  .cover { text-align: center; padding: 60px 0 40px; }
+  .cover h1 { font-size: 2.8em; margin-bottom: 0.3em; }
+  .cover .meta { color: var(--muted); font-size: 0.95em; margin-top: 2em; }
+  ul, ol { margin-bottom: 1em; padding-left: 1.5em; }
+  li { margin-bottom: 0.4em; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 2em 0; }
+  .key-insight { background: #fefcbf; border: 2px solid #d69e2e; border-radius: 8px; padding: 16px 20px; margin: 1.5em 0; }
+  .key-insight strong { color: #744210; }
+  .prompt-box {
+    background: #1a202c; color: #e2e8f0; padding: 24px; border-radius: 8px; margin: 1.5em 0; position: relative;
+  }
+  .prompt-box::before {
+    content: "Claude Code Prompt — copy this entire block";
+    display: block; font-family: 'SF Mono', monospace; font-size: 0.75em; color: #a0aec0;
+    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2d3748;
+  }
+  .prompt-box code { background: none; padding: 0; color: inherit; font-size: 0.85em; white-space: pre-wrap; }
+  .task-header {
+    background: var(--primary); color: white; padding: 16px 24px;
+    border-radius: 8px 8px 0 0; margin-top: 3em; margin-bottom: 0;
+  }
+  .task-header h2 { color: white; border: none; margin: 0; padding: 0; font-size: 1.4em; }
+  .task-header + .task-body { border: 2px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 24px; margin-top: 0; }
+  .gate { background: #fed7d7; border: 2px solid #e53e3e; border-radius: 8px; padding: 14px 18px; margin: 1.5em 0; }
+  .gate strong { color: #9b2c2c; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <h1>InnerSight UEBA</h1>
+  <p style="font-size:1.4em; color: var(--primary);">Phase 1: Universal Data Pipeline</p>
+  <p style="font-size:1.1em; color: var(--accent);">Task Guide with Claude Code Prompts</p>
+  <div class="meta">
+    <p>8 Atomic Tasks &middot; Each Ends with a Git Commit &middot; Execute In Order</p>
+    <p>June 2026</p>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<h2>Overview</h2>
+
+<p>Phase 0 is complete (18 commits). The current data pipeline (<code>backend/data/pipeline.py</code>) only loads <strong>one CERT version</strong> (r4.2). The CERT dataset has <strong>10 versions</strong> (r1 through r6.2) with significant schema drift &mdash; missing columns, renamed activities, different date formats, absent file types, and sizes ranging from 0.5 GB to 94 GB.</p>
+
+<p>Phase 1 builds an adapter layer so any version loads through one interface, producing identical canonical DataFrames. This is the foundation every downstream module depends on.</p>
+
+<div class="key-insight">
+  <strong>Execution method:</strong> Copy the prompt from each task and paste it into Claude Code. After each task, verify the commit was made before moving to the next.<br><br>
+  <strong>Important:</strong> Execute tasks IN ORDER. Task 1 creates the shared schema that all subsequent tasks import.<br><br>
+  <strong>Coding standards:</strong> Two skills are enforced. <strong>python-standards</strong>: type every signature (<code>X | None</code> not <code>Optional</code>), pathlib over os.path, logging over print, frozen dataclasses for config, explicit errors with context. <strong>ml-training</strong>: applies to dataset/tensor code in later phases.
+</div>
+
+<div class="box box-info">
+  <h4>Essential Reference: DATASET_CONTEXT.md</h4>
+  <p>The uploaded <code>DATASET_CONTEXT.md</code> (also called <code>CERT_DATASET_REFERENCE.md</code>) documents every schema quirk across all 10 versions. Claude Code <strong>must read this file</strong> before implementing any adapter. It contains exact CSV column lists, date format variations, activity name differences, and the adapter fingerprint decision tree. The prompts below reference it &mdash; make sure it is available in the project root or uploaded to the conversation.</p>
+</div>
+
+<!-- TASK SUMMARY TABLE -->
+<h2>Task Summary</h2>
+
+<table>
+  <tr><th>#</th><th>Task</th><th>Git Commit</th><th>New/Modified Files</th></tr>
+  <tr><td>1</td><td>Canonical Schema + Config Updates</td><td>Phase 1.1</td><td>backend/schema.py, backend/config.py</td></tr>
+  <tr><td>2</td><td>Individual File Loaders</td><td>Phase 1.2</td><td>backend/data/loaders.py</td></tr>
+  <tr><td>3</td><td>Version Adapters (6 families)</td><td>Phase 1.3</td><td>backend/data/adapters.py</td></tr>
+  <tr><td>4</td><td>Answers Parser</td><td>Phase 1.4</td><td>backend/data/answers.py</td></tr>
+  <tr><td>5</td><td>Universal Pipeline Orchestrator</td><td>Phase 1.5</td><td>backend/data/pipeline.py (rewrite)</td></tr>
+  <tr><td>6</td><td>Feature Store (Parquet)</td><td>Phase 1.6</td><td>backend/data/feature_store.py</td></tr>
+  <tr><td>7</td><td>Unit Tests</td><td>Phase 1.7</td><td>backend/tests/test_schema.py, test_loaders.py, test_adapters.py, test_answers.py, test_pipeline_universal.py, test_feature_store.py</td></tr>
+  <tr><td>8</td><td>Integration Test + Provenance</td><td>Phase 1.8</td><td>backend/tests/test_integration_pipeline.py, provenance in pipeline.py</td></tr>
+</table>
+
+<div class="gate">
+  <strong>VALIDATION GATE (after all 8 tasks):</strong> All 6 adapters pass unit tests against synthetic CSV headers. Answers parser loads the correct insider count per version. Feature store Parquet round-trip loses no data. Every new file passes <code>ruff check</code> with type hints on all public functions.
+</div>
+
+<hr>
+
+<!-- ═══════════════════════ TASK 1 ═══════════════════════ -->
+<div class="task-header"><h2>Task 1: Canonical Schema + Config Updates</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>No single source of truth for what columns each log type should have after normalization. The existing <code>pipeline.py</code> hard-codes column expectations inline. Without a shared contract, every adapter would independently invent column names.</p>
+  <p>Also, <code>config.py</code> is missing CERT-specific constants: version family mappings, the real job-search domains from the dataset (the existing <code>JOB_KEYWORDS</code> is incomplete), and chunked-reading config.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p><code>schema.py</code> becomes the import every adapter, loader, and test uses. <code>validate_dataframe(df, schema)</code> catches schema drift at load time, not silently in a training loop hours later.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+All imports use `from innersight.backend.X import Y`.
+
+TASK: Create backend/schema.py and update backend/config.py. This is Phase 1, Task 1.
+
+READ first: the DATASET_CONTEXT.md (or CERT_DATASET_REFERENCE.md) — you need the
+exact column lists from sections 3.1–3.8 to define the canonical schemas.
+
+--- schema.py ---
+
+Create a frozen dataclass `ColumnSchema` with fields:
+  - name (str): log type name for error messages
+  - required (dict[str, str]): column_name → pandas dtype string
+  - optional (dict[str, str]): column_name → pandas dtype string
+  - Properties: required_columns, all_columns
+
+Define one ColumnSchema constant for each log type:
+  LOGON_SCHEMA, DEVICE_SCHEMA, EMAIL_SCHEMA, HTTP_SCHEMA, FILE_SCHEMA,
+  LDAP_SCHEMA, PSYCHOMETRIC_SCHEMA, INSIDER_SCHEMA
+
+The canonical columns for each are the UNION of all versions — the richest schema
+(r5.x/r6.x) with extra columns marked optional. For example:
+  - DEVICE required: id, date, user, pc, activity
+  - DEVICE optional: file_tree (only r5+)
+  - EMAIL required: id, date, user, pc, to, cc, bcc, from, size, attachments, content
+  - HTTP required: id, date, user, pc, url, content
+  - HTTP optional: activity (only r6)
+  Use the DATASET_CONTEXT.md sections 3.1–3.8 for the exact column lists.
+
+Define `FEATURE_NAMES: list[str]` — the 18 per-user-per-day feature names.
+These already exist in config.py as FEATURE_COLS — use the same names and ordering.
+
+Create `validate_dataframe(df, schema, source)` that raises ValueError if any
+required column is missing, and logs a debug message for absent optional columns.
+
+--- config.py ---
+
+ADD (don't remove existing constants):
+  - VERSION_FAMILIES: dict mapping version strings to adapter family names.
+    Keys: 'r1','r2','r3.1','r3.2','r4.1','r4.2','r5.1','r5.2','r6.1','r6.2'
+    Values: 'r1','r2','r3x','r3x','r4x','r4x','r5x','r5x','r6x','r6x'
+
+  - CERT_JOB_DOMAINS: tuple of job-search URL patterns from the actual dataset
+    (monster.com, careerbuilder.com, craigslist.org, jobhuntersbible.com, aol.com/jobs,
+     plus the existing generic keywords: job, career, linkedin, indeed)
+
+  - CERT_CLOUD_DOMAINS: tuple ('wikileaks.org', 'dropbox')
+
+  - CSV_CHUNK_SIZE: int = 50_000 (rows per chunk for streaming large CSVs)
+
+VERIFY: import both modules, print schema column counts, print version families count.
+Ruff check both files.
+
+Git commit: "Phase 1.1: Canonical schema contracts and config updates"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 2 ═══════════════════════ -->
+<div class="task-header"><h2>Task 2: Individual File Loaders</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>The current pipeline calls <code>pd.read_csv(path, parse_dates=['date'])</code> on everything. This fails on: r1 http.csv (no header row), r2 dates (not zero-padded), r5/r6 extra columns. Each file type needs a dedicated loader that handles its parsing quirks.</p>
+  <p>Additionally, LDAP (directory of monthly CSVs), psychometric, and decoy_file each have unique formats with no existing loaders.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>Loaders are the lowest-level building blocks. They know HOW to parse a file but NOT which version's quirks to handle (that's the adapter's job, Task 3). An adapter configures a loader with "read this file with these column overrides" and the loader does the mechanical work.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Create backend/data/loaders.py — low-level CSV parsers. This is Phase 1, Task 2.
+
+Phase 1.1 created backend/schema.py with canonical schemas and validate_dataframe().
+Phase 1.1 added CSV_CHUNK_SIZE = 50_000 to config.py.
+
+Create these functions:
+
+1. load_csv(path, *, columns, date_col, has_header, dtype_overrides) → pd.DataFrame
+   Generic CSV reader. Accepts Path object. Parses date column.
+   If has_header=False, the `columns` parameter supplies column names.
+   Use pd.to_datetime(format='mixed', dayfirst=False) for date parsing — this
+   handles both zero-padded (01/04/2010) and non-padded (1/4/2010) dates.
+   Sort by date, return clean DataFrame.
+   Raise FileNotFoundError if path missing.
+   Raise ValueError if has_header=False and columns is None.
+
+2. load_csv_chunked(path, *, columns, date_col, has_header, chunk_size) → Iterator[pd.DataFrame]
+   Streaming reader for large files (r6.2 http.csv is 85M rows).
+   Same interface as load_csv but yields chunks.
+   Uses pd.read_csv(chunksize=...).
+
+3. load_ldap_directory(ldap_dir) → pd.DataFrame
+   CERT LDAP is a directory of monthly CSVs named YYYY-MM.csv (e.g., 2010-01.csv).
+   Load the LATEST snapshot by filename sort order.
+   Normalize column names to lowercase (r1 has capitalized: Domain, Email, Role).
+   Drop the 'domain' column if present (always 'dtaa.com', useless).
+   Return empty DataFrame with LDAP_SCHEMA columns if directory missing.
+
+4. load_psychometric(path) → pd.DataFrame
+   OCEAN scores. Schema: employee_name, user_id, O, C, E, A, N.
+   Identical across all versions that have it (r2+). r1 has none.
+   Validate against PSYCHOMETRIC_SCHEMA. Return empty if file missing.
+
+5. load_decoy_files(path) → pd.DataFrame
+   Decoy file registry (r5+ only). Schema: decoy_filename, pc.
+   r6 may have quoted fields — strip them.
+   Return empty if file missing.
+
+All functions: use pathlib.Path, logging.getLogger(__name__), and return
+empty DataFrames with correct columns when files are absent (never crash on
+missing optional files).
+
+VERIFY: import all functions, ruff check.
+
+Git commit: "Phase 1.2: Individual file loaders for all CERT data types"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 3 ═══════════════════════ -->
+<div class="task-header"><h2>Task 3: Version Adapters (6 Families)</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>The 10 CERT versions have significant schema drift. The key differences are documented in DATASET_CONTEXT.md sections 3 and 5. Each adapter must normalize its version's raw CSVs into the canonical schemas from Task 1.</p>
+</div>
+
+<div class="box box-why">
+  <h4>Critical Quirks (from DATASET_CONTEXT.md — Claude Code MUST read this file)</h4>
+  <table>
+    <tr><th>Family</th><th>Key Differences</th></tr>
+    <tr><td>r1</td><td>User IDs prefixed <code>DTAA/</code> (strip it). HTTP has NO header row (5 cols). No email.csv, file.csv, psychometric.csv. LDAP has capitalized column names.</td></tr>
+    <tr><td>r2</td><td>Device uses <code>Insert/Remove</code> not <code>Connect/Disconnect</code>. Email has only 4 columns (id,date,to,from). Dates not zero-padded.</td></tr>
+    <tr><td>r3x</td><td>Email has 7 columns — no user or pc column. User must be inferred from the <code>from</code> field via LDAP email→user_id mapping later.</td></tr>
+    <tr><td>r4x</td><td>Full email schema. File has 6 columns (every row = removable media copy, no explicit flag). This is our primary training version.</td></tr>
+    <tr><td>r5x</td><td>Device adds <code>file_tree</code>. Email adds <code>activity</code>. File adds <code>to_removable_media</code>. LDAP adds <code>projects</code>. Decoy files exist.</td></tr>
+    <tr><td>r6x</td><td>HTTP adds <code>activity</code> column. HUGE file &mdash; must use streaming. Email changes Receive→View. Content is full sentences not bag-of-words.</td></tr>
+  </table>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>After this task, <code>get_adapter('r5.2').load_logon(data_dir)</code> returns the same canonical schema as <code>get_adapter('r1').load_logon(data_dir)</code>. Downstream code never needs to know which version it's working with.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Create backend/data/adapters.py — 6 version adapters. This is Phase 1, Task 3.
+
+READ FIRST: DATASET_CONTEXT.md sections 3 (CSV schemas) and 5 (quirks).
+This file has the EXACT column lists, date formats, and normalization rules
+for every version. You MUST reference it — do not guess at schemas.
+
+Phase 1.1: backend/schema.py has canonical schemas (LOGON_SCHEMA, DEVICE_SCHEMA, etc.)
+Phase 1.2: backend/data/loaders.py has load_csv, load_csv_chunked, load_ldap_directory, etc.
+backend/config.py has VERSION_FAMILIES mapping version strings to family names.
+
+ARCHITECTURE:
+
+Define a Protocol class `CertAdapter` with these methods:
+  load_logon(data_dir: Path) → pd.DataFrame
+  load_device(data_dir: Path) → pd.DataFrame
+  load_email(data_dir: Path) → pd.DataFrame
+  load_http(data_dir: Path) → pd.DataFrame
+  load_file(data_dir: Path) → pd.DataFrame
+  load_ldap(data_dir: Path) → pd.DataFrame
+  load_psychometric(data_dir: Path) → pd.DataFrame
+  load_decoy_files(data_dir: Path) → pd.DataFrame
+
+Implement 6 concrete adapter classes: R1Adapter, R2Adapter, R3xAdapter,
+R4xAdapter, R5xAdapter, R6xAdapter.
+
+Each adapter should be THIN (15-30 lines). Its job:
+  1. Call the appropriate loader from loaders.py with version-specific config
+     (column names, has_header flag, etc.)
+  2. Apply version-specific normalizations (strip DTAA/ prefix, rename
+     Insert→Connect, add missing columns as None/NaN, etc.)
+  3. Validate the result against the canonical schema
+  4. Return empty DataFrames with correct columns for absent files (never crash)
+
+Specific adapter behaviors:
+  - R1Adapter: strip "DTAA/" from user column in logon/device/http. HTTP uses
+    load_csv(has_header=False, columns=['id','date','user','pc','url']). Email
+    and file return empty DataFrames. No psychometric.
+  - R2Adapter: map device activity Insert→Connect, Remove→Disconnect. Email
+    loads only 4 columns, adds missing ones as None.
+  - R3xAdapter: email has 7 columns (no user, no pc). Set user=None, pc=None.
+  - R4xAdapter: standard. File: add to_removable_media='True' to all rows
+    (in r4x every file row IS a removable-media copy).
+  - R5xAdapter: file/email have extra columns. Load decoy files.
+  - R6xAdapter: HTTP uses load_csv_chunked for streaming, then concatenates.
+    Has activity column on HTTP. Email activity uses "View" not "Receive".
+
+Factory functions:
+
+  get_adapter(version: str) → CertAdapter
+    Looks up VERSION_FAMILIES, returns the right adapter instance.
+    Raises ValueError for unknown versions.
+
+  auto_detect_version(data_dir: Path) → str
+    Reads the FIRST LINE of key CSV files to fingerprint the version family.
+    Use the decision tree from DATASET_CONTEXT.md section 7 (Adapter Fingerprints):
+      - No http.csv header → r1
+      - email.csv has only 4 columns → r2
+      - email.csv has 'size' but no 'user' → r3x
+      - email.csv has 'user' but no 'activity' → r4x
+      - http.csv has 'activity' column → r6x
+      - Otherwise → r5x
+    Returns a FAMILY string like 'r4x', NOT a concrete version.
+
+VERIFY: get_adapter('r4.2') returns R4xAdapter, get_adapter('r1') returns R1Adapter.
+Ruff check.
+
+Git commit: "Phase 1.3: Version adapters for all 6 CERT dataset families"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 4 ═══════════════════════ -->
+<div class="task-header"><h2>Task 4: Answers Parser</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>The current <code>load_labels()</code> returns a flat set of <code>(user, date)</code> tuples. This loses scenario info, attack start/end timestamps, and per-insider event logs. Phase 2 needs attack windows for overlap-ratio labeling. Phase 3+ needs per-scenario evaluation.</p>
+  <p>The answers directory also has two formats: flat CSVs (r2, r3, r6) and subdirectory-organized files (r4.2, r5.2). The current parser doesn't handle subdirectories.</p>
+</div>
+
+<div class="box box-why">
+  <h4>Version Mismatch Design Decision (Council-Reviewed)</h4>
+  <p><code>auto_detect_version()</code> returns a FAMILY string (<code>'r4x'</code>) because CSV fingerprinting can't distinguish r4.1 from r4.2. But <code>insiders.csv</code> has exact versions (<code>dataset='4.2'</code>). The council reviewed this and the verdict is:</p>
+  <p><strong>When <code>load_insiders</code> receives a family string ending in 'x', use prefix matching</strong> against the dataset column (e.g., <code>'4x'</code> → match rows starting with <code>'4'</code>). This is safe because each data directory's insiders.csv only contains its own version's rows. <strong>Also: raise ValueError if zero insiders are found</strong> when insiders.csv exists and has rows — silent zero-labels is a critical bug.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>Downstream modules get structured <code>InsiderRecord</code> objects with attack windows instead of raw tuples. The attack window dictionary enables overlap-ratio labeling in Phase 2. Per-scenario tracking enables per-scenario evaluation in Phase 3+.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Create backend/data/answers.py — insider label parser. This is Phase 1, Task 4.
+
+Phase 1.1 created backend/schema.py with INSIDER_SCHEMA.
+
+ARCHITECTURE:
+
+1. Frozen dataclass `InsiderRecord` with fields:
+   user_id (str), scenario (int), dataset (str),
+   attack_start (pd.Timestamp), attack_end (pd.Timestamp),
+   details_file (str)
+
+2. load_insiders(answers_dir: Path, version: str) → list[InsiderRecord]
+   Parses the master insiders.csv file.
+   The `version` parameter may be either:
+     - An exact version: 'r4.2' → strip 'r' → match dataset=='4.2'
+     - A family string: 'r4x' → strip 'r', strip 'x' → prefix match on '4'
+   IMPORTANT (council decision): if insiders.csv exists with rows but filtering
+   returns zero matches, raise ValueError with a message showing the version
+   string you tried and the actual dataset values in the CSV. Silent zero-labels
+   is a critical bug that causes the model to train on all-negative data.
+   Date format in insiders.csv: M/D/YYYY H:MM:SS (not zero-padded).
+
+3. get_attack_windows(answers_dir: Path, version: str) → dict[str, InsiderRecord]
+   Calls load_insiders, returns dict keyed by user_id.
+   This is the primary interface for Phase 2's overlap-ratio labeling.
+
+4. get_malicious_dates(answers_dir: Path, version: str) → set[tuple[str, date]]
+   Backward-compatible interface matching old pipeline.load_labels() return format.
+   For each insider, generates all dates in their [attack_start, attack_end] window.
+   Returns set of (user_id, datetime.date) tuples.
+
+VERIFY: import all functions, create an InsiderRecord, verify it's frozen.
+Ruff check.
+
+Git commit: "Phase 1.4: Answers parser with InsiderRecord and attack windows"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 5 ═══════════════════════ -->
+<div class="task-header"><h2>Task 5: Universal Pipeline Orchestrator</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>The current <code>pipeline.py</code> must be rewritten to orchestrate the adapter + loader + answers layers. The existing functions (<code>load_raw_logs</code>, <code>load_labels</code>, <code>time_split</code>, <code>load_data</code>) are imported by <code>api.py</code>, <code>features.py</code>, <code>scoring.py</code>, <code>feedback.py</code>, <code>graph_builder.py</code>, <code>trainer.py</code>, and multiple scripts &mdash; 12+ import sites total. The public API must remain backward compatible.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>After this task, <code>load_version(path, 'r5.2')</code> returns a single <code>CertDataset</code> object containing all logs, labels, LDAP, psychometric. Existing callers of <code>load_data()</code> still work unchanged.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Rewrite backend/data/pipeline.py as the universal orchestrator. This is Phase 1, Task 5.
+
+Phase 1.1–1.4 created: schema.py, data/loaders.py, data/adapters.py, data/answers.py.
+config.py has: DATA_DIR, TRAIN_END_DATE, VAL_END_DATE, VERSION_FAMILIES.
+
+ARCHITECTURE:
+
+1. Dataclass `CertDataset` with fields:
+   version (str), data_dir (Path),
+   logs (dict[str, pd.DataFrame]) — keyed by log type name,
+   insiders (list[InsiderRecord]),
+   attack_windows (dict[str, InsiderRecord]) — keyed by user_id,
+   ldap (pd.DataFrame), psychometric (pd.DataFrame),
+   decoy_files (pd.DataFrame),
+   provenance (dict) — populated in Task 8
+
+2. load_version(data_dir: str|Path, version: str|None = None) → CertDataset
+   PRIMARY ENTRY POINT. If version is None, calls auto_detect_version().
+   Creates the adapter via get_adapter(version).
+   Calls each adapter.load_*() method to populate logs dict.
+   Loads LDAP, psychometric, decoy files via the adapter.
+   Loads insider labels from answers/ subdirectory.
+   Returns a populated CertDataset.
+
+3. BACKWARD-COMPATIBLE WRAPPERS (keep these signatures):
+   - load_raw_logs(data_dir=DATA_DIR) → dict[str, pd.DataFrame]
+     Calls load_version with auto-detect, returns .logs
+   - load_labels(answers_dir: str) → set[tuple[str, Any]]
+     Delegates to answers.get_malicious_dates
+   - time_split(logs_dict, train_end, val_end) → dict of split dicts
+     UNCHANGED — this is a pure function, version-agnostic. Copy from current pipeline.py.
+   - load_data(data_dir=DATA_DIR) → dict with keys 'splits', 'labels'
+     Calls load_version + time_split, returns in old format.
+
+   These are imported by 12+ files:
+   api.py, scoring.py, feedback.py, trainer.py, graph_builder.py,
+   and several scripts. They MUST keep working.
+
+4. Update backend/data/__init__.py to export:
+   CertDataset, load_version, load_raw_logs, load_labels, time_split, load_data
+
+VERIFY: import all functions from both pipeline.py and data/__init__.py.
+Ruff check.
+
+Git commit: "Phase 1.5: Universal pipeline orchestrator with backward-compatible wrappers"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 6 ═══════════════════════ -->
+<div class="task-header"><h2>Task 6: Feature Store (Parquet Persistence)</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>The pipeline recomputes features from raw CSV on every run. For r4.2 this takes ~30 seconds. For r6.2 with 85M HTTP rows, potentially hours. Feature computation is deterministic — recomputation is pure waste. Phase 2 will add EMA baselines on top, making this even more expensive.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>Once features are computed, they persist as Parquet. Subsequent runs load in milliseconds. Phase 2 extends this with deviation caching.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Create backend/data/feature_store.py — Parquet-based cache. This is Phase 1, Task 6.
+
+ARCHITECTURE:
+
+Class `FeatureStore` with a configurable store directory. Directory structure:
+  store_dir/
+    r4.2/
+      features.parquet     — daily (user, date, 18 features, label)
+      deviations.parquet   — z-scored deviations (Phase 2 will populate this)
+      metadata.json        — provenance: version, timestamp, row counts
+
+Methods:
+  save_features(version, df) → Path
+  load_features(version) → pd.DataFrame | None (None if no cache)
+  save_deviations(version, df) → Path
+  load_deviations(version) → pd.DataFrame | None
+  save_metadata(version, meta_dict) → Path — auto-adds 'cached_at' timestamp
+  load_metadata(version) → dict | None
+  is_stale(version, data_dir) → bool — True if any CSV in data_dir is newer than cache
+  clear(version) → None — remove all cached data for a version
+
+Use pyarrow engine for Parquet. All paths via pathlib.
+
+VERIFY: quick round-trip test — save a small DataFrame, load it, check equality.
+Ruff check.
+
+Git commit: "Phase 1.6: Parquet-based feature store with cache invalidation"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 7 ═══════════════════════ -->
+<div class="task-header"><h2>Task 7: Unit Tests for All New Modules</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>Tasks 1-6 created 6 new modules with no tests. EMA adapters have subtle normalization bugs (forgotten DTAA/ stripping, wrong activity mapping) that silently corrupt downstream features.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>Tests lock in the contracts from Tasks 1-6. When Phase 2 modifies the pipeline (adding baselines), these tests prevent regressions. The synthetic CSV fixtures also serve as documentation of each version's format.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Create unit tests for all Phase 1 modules. This is Phase 1, Task 7.
+
+DO NOT modify existing tests in backend/tests/. Create NEW test files alongside them.
+All tests must work WITHOUT real CERT data — use small synthetic CSVs in fixtures.
+
+Create these test files with the specified test cases:
+
+1. backend/tests/test_schema.py
+   - LOGON_SCHEMA has the 5 required columns (id, date, user, pc, activity)
+   - validate_dataframe passes on a valid DataFrame
+   - validate_dataframe raises ValueError when a required column is missing
+   - FEATURE_NAMES has exactly 18 entries
+
+2. backend/tests/test_loaders.py
+   Fixture: write tiny CSVs to tmp_path matching CERT r4.2 format (3-5 rows each).
+   - load_csv reads correctly, dates are parsed, rows sorted by date
+   - load_csv with has_header=False works with supplied column names
+   - load_csv raises FileNotFoundError for missing file
+   - load_csv raises ValueError when has_header=False and columns=None
+   - load_ldap_directory loads the latest monthly snapshot from a dir with 2 CSVs
+   - load_ldap_directory returns empty DataFrame for missing directory
+   - load_psychometric loads OCEAN scores correctly
+   - load_decoy_files loads decoy registry
+
+3. backend/tests/test_adapters.py
+   Fixtures: create minimal data directories matching r1-style and r4.2-style formats.
+   For r1: logon.csv with DTAA/ prefixed users, http.csv with NO header, no email.csv.
+   For r4.2: all 5 CSVs with standard headers.
+   - get_adapter('r4.2') returns R4xAdapter
+   - get_adapter('r1') returns R1Adapter
+   - get_adapter('r99') raises ValueError
+   - R1 adapter strips DTAA/ prefix from user column
+   - R2 adapter normalizes Insert→Connect, Remove→Disconnect
+   - R4x adapter loads all 5 log types from synthetic directory
+   - Adapter returns empty DataFrame for missing files (not crash)
+   - auto_detect_version identifies r4x-style directory correctly
+
+4. backend/tests/test_answers.py
+   Fixture: create synthetic answers/ dir with an insiders.csv having 2-3 rows.
+   - load_insiders returns correct InsiderRecord count
+   - load_insiders filters by version (CSV has rows for 4.2 and 5.2, loading r4.2 returns only 4.2)
+   - load_insiders with family string 'r4x' matches '4.2' rows (prefix match)
+   - load_insiders raises ValueError when insiders.csv has rows but filter returns zero
+   - get_attack_windows returns dict keyed by user_id
+   - get_malicious_dates returns set of (str, date) tuples
+   - InsiderRecord is frozen (modifying raises error)
+
+5. backend/tests/test_pipeline_universal.py
+   Fixture: complete synthetic r4.2 directory (all CSVs + LDAP + answers).
+   - load_version returns CertDataset with all fields populated
+   - logs dict has keys: logon, device, email, http, file
+   - CertDataset.insiders has correct count
+   - CertDataset.attack_windows keyed by user_id
+   - time_split produces train/val/test with correct column preservation
+
+6. backend/tests/test_feature_store.py
+   - save_features + load_features round-trip: data matches
+   - load_features returns None when no cache exists
+   - save_metadata + load_metadata round-trip
+   - is_stale returns True when no cache exists
+   - clear removes cached data
+
+Run the full test suite (including existing tests) to confirm no regressions.
+Ruff check all new test files.
+
+Git commit: "Phase 1.7: Unit tests for all universal pipeline modules"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ TASK 8 ═══════════════════════ -->
+<div class="task-header"><h2>Task 8: Integration Test + Provenance Manifest</h2></div>
+<div class="task-body">
+
+<div class="box box-problem">
+  <h4>The Problem</h4>
+  <p>Unit tests verify modules in isolation. The real question: does the full pipeline — adapter → loader → pipeline → features → feature store — produce correct output end-to-end? We also need provenance tracking: a JSON manifest per run recording version, file hashes, row counts, and timestamp.</p>
+</div>
+
+<div class="box box-solution">
+  <h4>How This Achieves the Goal</h4>
+  <p>The integration test is the Phase 1 validation gate. The provenance manifest enables reproducibility — you can trace which data and adapter produced a given set of features.</p>
+</div>
+
+<h3>Claude Code Prompt</h3>
+<div class="prompt-box"><code>You are working on the InnerSight UEBA project at /Users/michaelkuksov/Developer/innersight.
+
+TASK: Add provenance and integration test. This is Phase 1, Task 8 (final task).
+
+STEP 1: Add provenance to pipeline.py
+
+In load_version(), after loading all data, compute a provenance dict containing:
+  - version, adapter class name, data_dir path, loaded_at (UTC ISO timestamp)
+  - row_counts per log type, insider_count, ldap_count, psychometric_count
+  - file_hashes: SHA-256 of the first 64KB of each CSV (fast fingerprint)
+Store it in the CertDataset.provenance field.
+
+Add `provenance: dict` to the CertDataset dataclass (default empty dict).
+
+STEP 2: Create backend/tests/test_integration_pipeline.py
+
+Fixture: comprehensive synthetic r4.2 directory with:
+  - 3 users (2 normal, 1 insider), multiple days of data in each CSV
+  - The insider (e.g., AAF0535) has an after-hours logon + USB connect in the data
+  - answers/insiders.csv with one entry for the insider
+  - LDAP with role info, psychometric with OCEAN scores
+
+Integration test cases:
+  - load_version returns CertDataset with all logs non-empty
+  - Insider is found in insiders list and attack_windows dict
+  - LDAP and psychometric loaded with correct row counts
+  - Provenance dict has version, row_counts, loaded_at, file_hashes
+  - features.build_user_day_features() works with the pipeline output
+    (this proves Phase 1 output is compatible with existing feature extraction)
+  - Feature store round-trip: save features from pipeline output, load back, verify identical
+  - Backward compat: time_split on pipeline output produces train/val/test dicts
+
+Run the FULL test suite. Ruff check all modified files.
+
+Git commit: "Phase 1.8: Integration tests and provenance manifest — Phase 1 complete"</code></div>
+
+</div>
+
+<!-- ═══════════════════════ AFTER PHASE 1 ═══════════════════════ -->
+<hr>
+
+<h2>After Phase 1</h2>
+
+<p>When all 8 tasks are complete:</p>
+
+<ul>
+  <li><strong>Canonical schema contracts</strong> (<code>schema.py</code>) &mdash; single source of truth for column definitions</li>
+  <li><strong>6 version adapters</strong> (<code>adapters.py</code>) &mdash; any CERT version normalized to canonical format</li>
+  <li><strong>Structured insider labels</strong> (<code>answers.py</code>) &mdash; InsiderRecord with attack windows, per-scenario tracking, prefix-match for family strings</li>
+  <li><strong>Universal pipeline</strong> (<code>pipeline.py</code>) &mdash; <code>load_version(path, 'r5.2')</code> loads everything</li>
+  <li><strong>Feature store</strong> (<code>feature_store.py</code>) &mdash; Parquet persistence, never recompute</li>
+  <li><strong>Provenance tracking</strong> &mdash; JSON manifest per load with hashes and row counts</li>
+  <li><strong>Full test coverage</strong> &mdash; unit + integration on synthetic data</li>
+  <li><strong>Backward compatibility</strong> &mdash; existing callers (api.py, features.py, 12+ import sites) unchanged</li>
+</ul>
+
+<div class="box box-info">
+  <h4>New File Tree (Phase 1 additions in bold)</h4>
+  <pre><code>backend/
+├── <strong>schema.py</strong>                    ← canonical column contracts
+├── config.py                      ← updated with CERT constants
+├── data/
+│   ├── __init__.py                ← updated exports
+│   ├── pipeline.py                ← REWRITTEN: universal orchestrator
+│   ├── <strong>loaders.py</strong>               ← individual CSV parsers
+│   ├── <strong>adapters.py</strong>              ← 6 version family adapters
+│   ├── <strong>answers.py</strong>               ← insider labels + attack windows
+│   └── <strong>feature_store.py</strong>         ← Parquet persistence
+├── tests/
+│   ├── <strong>test_schema.py</strong>
+│   ├── <strong>test_loaders.py</strong>
+│   ├── <strong>test_adapters.py</strong>
+│   ├── <strong>test_answers.py</strong>
+│   ├── <strong>test_pipeline_universal.py</strong>
+│   ├── <strong>test_feature_store.py</strong>
+│   └── <strong>test_integration_pipeline.py</strong>
+└── (existing modules unchanged)</code></pre>
+</div>
+
+<p><strong>Next step:</strong> Phase 2 builds Module 1 (Per-User Baselines) — EMA computation, z-scored deviations, role-cohort cold-start, and the 28-day windowed dataset builder.</p>
+
+<hr>
+<p style="text-align: center; color: var(--muted); font-style: italic; margin-top: 3em;">
+  Phase 1: Universal Data Pipeline &mdash; InnerSight UEBA<br>
+  8 atomic tasks &middot; Each ends with a git commit &middot; Execute in order<br>
+  June 2026
+</p>
+
+</body>
+</html>
