@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import sys
@@ -150,13 +151,22 @@ def _filter_logs(logs: dict, exclude_users: set[str]) -> dict:
     return out
 
 
-def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None) -> dict:
-    """Build one windowed HeteroData per unique period (optionally excluding users)."""
+def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
+                         max_url_nodes: int | None = None,
+                         max_file_nodes: int | None = None) -> dict:
+    """Build one windowed HeteroData per unique period (optionally excluding users).
+
+    ``max_url_nodes`` / ``max_file_nodes`` cap the URL/file node count per window
+    to bound peak memory (see :func:`build_windowed_graph`).
+    """
     used_logs = _filter_logs(logs, exclude_users) if exclude_users else logs
     graphs = {}
     for period in set(periods):
         ws, we = period
-        graphs[period] = build_windowed_graph(used_logs, ws, we)
+        graphs[period] = build_windowed_graph(
+            used_logs, ws, we,
+            max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+        )
     return graphs
 
 
@@ -187,15 +197,59 @@ def _predict(model, positions, registry, graphs) -> np.ndarray:
     return probs
 
 
+def _inner_user_split(train_pos, user_ids, y, frac: float = 0.2, seed: int = 0):
+    """Hold out ~``frac`` of the TRAIN users (stratified by insider status) as an
+    inner monitor set for early stopping.
+
+    Selecting the epoch on this inner holdout — never on the outer validation
+    fold — keeps the reported CV metric free of model-selection leakage. The
+    split is user-level so the same user's windows never straddle the inner
+    train/monitor boundary.
+
+    Returns:
+        ``(inner_train_pos, inner_val_pos)`` integer arrays (subsets of ``train_pos``).
+    """
+    train_pos = np.asarray(train_pos, dtype=int)
+    y = np.asarray(y)
+    users = np.array([user_ids[p] for p in train_pos], dtype=object)
+    uniq = list(dict.fromkeys(users.tolist()))  # stable unique order
+    pos_u = [u for u in uniq if y[train_pos[users == u]].max() > 0]
+    pos_set = set(pos_u)
+    neg_u = [u for u in uniq if u not in pos_set]
+    rng = np.random.default_rng(seed)
+    rng.shuffle(pos_u)
+    rng.shuffle(neg_u)
+    n_pos_val = int(round(len(pos_u) * frac)) if len(pos_u) >= 2 else 0
+    n_neg_val = int(round(len(neg_u) * frac)) if len(neg_u) >= 2 else 0
+    val_users = set(pos_u[:n_pos_val]) | set(neg_u[:n_neg_val])
+    in_val = np.array([u in val_users for u in users], dtype=bool)
+    return train_pos[~in_val], train_pos[in_val]
+
+
 def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
-              temporal_cfg, graph_cfg, train_cfg, metadata) -> np.ndarray:
-    """Train the chained model on one fold; return val probabilities (val_pos order)."""
+              temporal_cfg, graph_cfg, train_cfg, metadata,
+              max_url_nodes=None, max_file_nodes=None):
+    """Train the chained model on one fold; return ``(val_probs, model)``.
+
+    Leakage-safe model selection: early stopping uses an INNER user-level holdout
+    carved from the training fold and scored on the (val-user-excluded) training
+    graphs. The outer ``val_pos`` fold is scored exactly once, at the end, on the
+    full-log graphs, and never influences which epoch is chosen.
+    """
     seed_everything(seed)
     windows_t, user_ids, period_keys, y = (
         registry["windows"], registry["user_ids"], registry["periods"], registry["y"])
 
     val_users = set(user_ids[val_pos].tolist())
-    train_graphs = _build_period_graphs(logs, period_keys, exclude_users=val_users)
+    train_graphs = _build_period_graphs(
+        logs, period_keys, exclude_users=val_users,
+        max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+    )
+
+    inner_train_pos, inner_val_pos = _inner_user_split(train_pos, user_ids, y, frac=0.2, seed=seed)
+    early_stop = inner_val_pos.size > 0 and float(y[inner_val_pos].sum()) > 0
+    if not early_stop:
+        inner_train_pos = np.asarray(train_pos, dtype=int)  # too few positives to monitor
 
     model = ChainedTemporalGraph(temporal_cfg, graph_cfg, metadata).to(_DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["lr"],
@@ -204,10 +258,11 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
                                  train_cfg["max_epochs"], train_cfg["eta_min"])
     criterion = FocalLoss(alpha=train_cfg["focal_alpha"], gamma=train_cfg["focal_gamma"])
 
-    train_by_period = _group_positions_by_period(train_pos, period_keys)
+    train_by_period = _group_positions_by_period(inner_train_pos, period_keys)
     period_order = list(train_by_period.keys())
 
-    best_auprc, best_state, since_improve = -1.0, None, 0
+    best_metric, since_improve = -1.0, 0
+    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
     for _epoch in range(train_cfg["max_epochs"]):
         model.train()
         generator = torch.Generator().manual_seed(seed + _epoch)
@@ -229,10 +284,14 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
             optimizer.step()
         scheduler.step()
 
-        val_probs = _predict(model, val_pos, registry, full_graphs)
-        auprc = compute_metrics(val_probs, y[val_pos])["auprc"]
-        if auprc > best_auprc:
-            best_auprc = auprc
+        if not early_stop:
+            continue  # no inner monitor → train the full epoch budget, keep final weights
+
+        # Monitor the inner holdout on the training graphs — never the outer fold.
+        iv_probs = _predict(model, inner_val_pos, registry, train_graphs)
+        metric = compute_metrics(iv_probs, y[inner_val_pos])["auprc"]
+        if metric > best_metric:
+            best_metric = metric
             best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
             since_improve = 0
         else:
@@ -240,9 +299,16 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
             if since_improve >= train_cfg["patience"]:
                 break
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
-    return _predict(model, val_pos, registry, full_graphs)
+    if early_stop:
+        model.load_state_dict(best_state)  # else keep final-epoch weights
+
+    # Free this fold's training graphs before scoring (keeps peak RAM bounded
+    # across the 15 fold×seed fits — the per-fold graphs are no longer needed).
+    del train_graphs
+    gc.collect()
+
+    val_probs = _predict(model, val_pos, registry, full_graphs)
+    return val_probs, model
 
 
 # ── Config / deviations ───────────────────────────────────────────────────────
@@ -299,6 +365,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help='Where to write the results JSON (default: temporal_graph_results.json)')
     p.add_argument('--checkpoint-dir', default='checkpoints', metavar='PATH',
                    help="Directory for the model checkpoint (default: 'checkpoints')")
+    p.add_argument('--max-url-nodes', type=int, default=2000, metavar='K',
+                   help="Cap URL nodes to the K most frequent domains per window "
+                        "(0 = no cap). Bounds memory on large http logs. Default: 2000.")
+    p.add_argument('--max-file-nodes', type=int, default=2000, metavar='K',
+                   help="Cap file nodes to the K most-copied filenames per window "
+                        "(0 = no cap). Default: 2000.")
     return p.parse_args(argv)
 
 
@@ -338,16 +410,24 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("train_temporal_graph | need labelled positive windows; aborting.")
         return 1
 
+    max_url_nodes = args.max_url_nodes if args.max_url_nodes and args.max_url_nodes > 0 else None
+    max_file_nodes = args.max_file_nodes if args.max_file_nodes and args.max_file_nodes > 0 else None
+    logger.info("train_temporal_graph | node caps: max_url_nodes=%s max_file_nodes=%s",
+                max_url_nodes, max_file_nodes)
+
     # Full-log graphs (used for evaluation and to derive a consistent metadata).
-    full_graphs = _build_period_graphs(logs, period_keys, exclude_users=None)
+    full_graphs = _build_period_graphs(logs, period_keys, exclude_users=None,
+                                       max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
     metadata = next(iter(full_graphs.values())).metadata()
 
     registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys, "y": y}
 
     def fit(train_pos, val_pos, seed):
-        return _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
-                         full_graphs=full_graphs, temporal_cfg=temporal_cfg,
-                         graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata)
+        val_probs, _ = _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
+                                 full_graphs=full_graphs, temporal_cfg=temporal_cfg,
+                                 graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata,
+                                 max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
+        return val_probs
 
     # Index registry trick: X carries original positions so the harness's slicing
     # gives the model_fn the original sample indices it needs for graph lookup.
@@ -372,12 +452,13 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_temporal_graph | detection: %d/%d insiders flagged, median latency=%s days.",
                 latency['detected_count'], latency['total_insiders'], latency['median_days'])
 
-    # Final model on all data → checkpoint.
+    # Final model on all data → checkpoint. (_fit_fold returns the trained model;
+    # the previous version saved a freshly-initialised, untrained model by mistake.)
     all_pos = np.arange(len(y))
-    final = ChainedTemporalGraph(temporal_cfg, graph_cfg, metadata).to(_DEVICE)
-    _ = _fit_fold(all_pos, all_pos, seeds[0], registry=registry, logs=logs,
-                  full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
-                  train_cfg=train_cfg, metadata=metadata)
+    _, final = _fit_fold(all_pos, all_pos, seeds[0], registry=registry, logs=logs,
+                         full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
+                         train_cfg=train_cfg, metadata=metadata,
+                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"temporal_graph_{args.version}.pt"

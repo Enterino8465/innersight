@@ -155,9 +155,10 @@ def main(argv: list[str] | None = None) -> int:
     registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys, "y": y}
 
     def fit(train_pos, val_pos, seed):
-        return _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
-                         full_graphs=full_graphs, temporal_cfg=temporal_cfg,
-                         graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata)
+        val_probs, _ = _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
+                                 full_graphs=full_graphs, temporal_cfg=temporal_cfg,
+                                 graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata)
+        return val_probs
 
     # Index-registry trick: X carries original positions so the CV harness's
     # slicing hands model_fn the indices it needs for graph lookup.

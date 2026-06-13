@@ -86,13 +86,58 @@ def _build_scheduler(optimizer, warmup_epochs: int, max_epochs: int, eta_min: fl
         optimizer, schedulers=[warmup, cosine], milestones=[max(1, warmup_epochs)])
 
 
+def _inner_holdout(y_train, frac: float = 0.2, seed: int = 0):
+    """Stratified inner train/val index split used only for early stopping.
+
+    Carves a held-out monitoring set from the *training* fold so checkpoint
+    selection never touches the outer validation fold (which would leak the
+    reported metric). Positives and negatives are split proportionally so the
+    monitor set keeps some of the rare positives when possible.
+
+    Returns:
+        ``(inner_train_idx, inner_val_idx)`` integer arrays into ``y_train``.
+    """
+    y = np.asarray(y_train).reshape(-1)
+    rng = np.random.default_rng(seed)
+    pos = np.where(y > 0)[0]
+    neg = np.where(y <= 0)[0]
+    rng.shuffle(pos)
+    rng.shuffle(neg)
+    # Need ≥2 of a class to spare one for the monitor set.
+    n_pos_val = int(round(len(pos) * frac)) if len(pos) >= 2 else 0
+    n_neg_val = int(round(len(neg) * frac)) if len(neg) >= 2 else 0
+    val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]).astype(int)
+    train_mask = np.ones(len(y), dtype=bool)
+    train_mask[val_idx] = False
+    return np.where(train_mask)[0], val_idx
+
+
 def _fit(X_train, y_train, X_val, y_val, model_cfg: dict, train_cfg: dict, seed: int) -> dict:
-    """Train one temporal-CNN model and return val probs + checkpoint material."""
+    """Train one temporal-CNN model and return val probs + checkpoint material.
+
+    Leakage-safe model selection: early stopping / best-checkpoint selection uses
+    an INNER validation split carved from the training fold only. The outer
+    ``X_val`` fold is scored exactly once, at the end, and is never used to choose
+    the epoch — so the reported cross-validation metric is not optimistically
+    biased by tuning on the data it is measured on.
+    """
     seed_everything(seed)
 
-    Xtr = torch.tensor(np.asarray(X_train), dtype=torch.float32, device=_DEVICE)  # shape: (n_tr, 18, T)
+    X_train = np.asarray(X_train)
+    y_train = np.asarray(y_train).reshape(-1)
+
+    inner_tr, inner_va = _inner_holdout(y_train, frac=0.2, seed=seed)
+    # Early stopping is only meaningful if the monitor set holds a positive.
+    early_stop = inner_va.size > 0 and float(y_train[inner_va].sum()) > 0
+    if not early_stop:
+        inner_tr = np.arange(len(y_train))  # too few positives → train on the full fold
+
+    Xtr = torch.tensor(X_train[inner_tr], dtype=torch.float32, device=_DEVICE)   # shape: (n_tr, 18, T)
+    ytr = torch.tensor(y_train[inner_tr], dtype=torch.float32, device=_DEVICE).reshape(-1, 1)
+    Xiv = (torch.tensor(X_train[inner_va], dtype=torch.float32, device=_DEVICE)
+           if early_stop else None)                                              # shape: (n_iv, 18, T)
+    yiv = y_train[inner_va] if early_stop else None
     Xva = torch.tensor(np.asarray(X_val), dtype=torch.float32, device=_DEVICE)    # shape: (n_va, 18, T)
-    ytr = torch.tensor(y_train, dtype=torch.float32, device=_DEVICE).reshape(-1, 1)  # shape: (n_tr, 1)
 
     model = _TemporalClassifier(model_cfg).to(_DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["lr"],
@@ -106,7 +151,7 @@ def _fit(X_train, y_train, X_val, y_val, model_cfg: dict, train_cfg: dict, seed:
     grad_clip = train_cfg["grad_clip"]
     generator = torch.Generator().manual_seed(seed)
 
-    best_auprc = -1.0
+    best_metric = -1.0
     best_epoch = 0
     best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
     epochs_since_improvement = 0
@@ -129,16 +174,19 @@ def _fit(X_train, y_train, X_val, y_val, model_cfg: dict, train_cfg: dict, seed:
             optimizer.step()
         scheduler.step()
 
+        if not early_stop:
+            continue  # no inner monitor set → just train the full epoch budget
+
         model.eval()
         with torch.no_grad():
-            val_probs = torch.sigmoid(model(Xva)).reshape(-1).cpu().numpy()  # shape: (n_va,)
-        auprc = compute_metrics(val_probs, y_val)["auprc"]
+            iv_probs = torch.sigmoid(model(Xiv)).reshape(-1).cpu().numpy()  # shape: (n_iv,)
+        metric = compute_metrics(iv_probs, yiv)["auprc"]
         mean_grad = float(np.mean(grad_norms)) if grad_norms else 0.0
-        logger.debug("train_temporal | epoch %d | val_auprc=%.4f | lr=%.2e | grad_norm=%.3f",
-                     epoch, auprc, scheduler.get_last_lr()[0], mean_grad)
+        logger.debug("train_temporal | epoch %d | inner_val_auprc=%.4f | lr=%.2e | grad_norm=%.3f",
+                     epoch, metric, scheduler.get_last_lr()[0], mean_grad)
 
-        if auprc > best_auprc:
-            best_auprc, best_epoch = auprc, epoch
+        if metric > best_metric:
+            best_metric, best_epoch = metric, epoch
             best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
             epochs_since_improvement = 0
         else:
@@ -146,7 +194,14 @@ def _fit(X_train, y_train, X_val, y_val, model_cfg: dict, train_cfg: dict, seed:
             if epochs_since_improvement >= train_cfg["patience"]:
                 break
 
-    model.load_state_dict(best_state)
+    if early_stop:
+        model.load_state_dict(best_state)
+    else:
+        # No monitoring happened: keep the final-epoch weights.
+        best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        best_epoch = train_cfg["max_epochs"] - 1
+        best_metric = float("nan")
+
     model.eval()
     with torch.no_grad():
         val_probs = torch.sigmoid(model(Xva)).reshape(-1).cpu().numpy()  # shape: (n_va,)
@@ -156,7 +211,7 @@ def _fit(X_train, y_train, X_val, y_val, model_cfg: dict, train_cfg: dict, seed:
         "model_state_dict": best_state,
         "optimizer_state_dict": optimizer.state_dict(),
         "epoch": best_epoch,
-        "best_metric": best_auprc,
+        "best_metric": best_metric,
     }
 
 

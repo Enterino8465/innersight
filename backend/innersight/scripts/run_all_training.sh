@@ -18,7 +18,8 @@ STORE_DIR="feature_store"
 OUTPUT_DIR="training_results"
 QUICK=0
 FORCE=0
-TIMEOUT=2700   # 45 minutes per step
+TIMEOUT=2700   # default 45 minutes per step (override with --timeout; heavy graph/
+               # fusion steps may legitimately need much longer)
 
 usage() {
     cat <<'EOF'
@@ -35,6 +36,8 @@ Options:
   --output-dir PATH   Where results JSONs, checkpoints and logs go (default: training_results).
   --quick             Smoke test: 1 seed, 2 folds, 3 epochs (fast).
   --force             Re-run every step even if its results JSON already exists.
+  --timeout SECONDS   Per-step time limit (default: 2700 = 45m; 0 = no limit).
+                      The graph/fusion steps often need more — raise it for full runs.
   -h, --help          Show this help and exit.
 
 Examples:
@@ -55,6 +58,7 @@ while [ $# -gt 0 ]; do
         --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
         --quick)      QUICK=1; shift ;;
         --force)      FORCE=1; shift ;;
+        --timeout)    TIMEOUT="$2"; shift 2 ;;
         -h|--help)    usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
     esac
@@ -100,7 +104,7 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 run_with_timeout() {
-    if [ -n "$TIMEOUT_BIN" ]; then
+    if [ -n "$TIMEOUT_BIN" ] && [ "$TIMEOUT" != "0" ]; then
         "$TIMEOUT_BIN" "$TIMEOUT" "$@"
     else
         "$@"
@@ -145,8 +149,12 @@ run_step() {
 log "================ run_all_training ================"
 log "version=$VERSION  data-dir=$DATA_DIR  store-dir=$STORE_DIR  output-dir=$OUTPUT_DIR"
 log "quick=$QUICK  force=$FORCE  python=$PYTHON"
-if [ -z "$TIMEOUT_BIN" ]; then
-    log "WARN  no 'timeout'/'gtimeout' found — steps run without a per-step time limit."
+log "per-step timeout=${TIMEOUT}s ($((TIMEOUT / 60))m; 0 = unlimited)"
+if [ -z "$TIMEOUT_BIN" ] && [ "$TIMEOUT" != "0" ]; then
+    log "WARN  no 'timeout'/'gtimeout' binary found — the per-step limit CANNOT be"
+    log "WARN  enforced, so a hung/runaway step (e.g. the graph step) will run"
+    log "WARN  unbounded. Install GNU coreutils ('apt-get install -y coreutils') to"
+    log "WARN  enable it, or watch the run manually."
 fi
 
 # In --quick mode, write a minimal config the config-driven scripts merge over

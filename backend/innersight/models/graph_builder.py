@@ -1760,9 +1760,24 @@ def _win_empty_edge(dim):
 
 
 def _win_pairs_to_edges(agg, cols, src_map, dst_map):
-    """Map an (src_key, dst_key)-indexed aggregate frame to edge tensors."""
+    """Map an (src_key, dst_key)-indexed aggregate frame to edge tensors.
+
+    Pairs whose src or dst key is absent from the node maps are skipped. This is
+    a no-op when every key is present (the default), and is what lets URL/file
+    node sets be capped to a top-K subset without crashing the edge builders.
+    """
     if agg is None or len(agg) == 0:
         return _win_empty_edge(len(cols))
+    src_keys = agg.index.get_level_values(0)
+    dst_keys = agg.index.get_level_values(1)
+    mask = np.fromiter(
+        ((s in src_map and d in dst_map) for s, d in zip(src_keys, dst_keys)),
+        dtype=bool, count=len(agg),
+    )
+    if not mask.any():
+        return _win_empty_edge(len(cols))
+    if not mask.all():
+        agg = agg[mask]
     src = [src_map[k] for k in agg.index.get_level_values(0)]
     dst = [dst_map[k] for k in agg.index.get_level_values(1)]
     edge_index = torch.tensor([src, dst], dtype=torch.long)
@@ -1991,7 +2006,30 @@ def _win_file_edges(file_w, file_p, user_to_idx, file_to_idx):
     return _win_pairs_to_edges(agg, cols, user_to_idx, file_to_idx)
 
 
-def build_windowed_graph(logs, window_start, window_end, prior_days=60):
+def _win_top_k_set(series, k, *, always_keep=None):
+    """Set of the ``k`` most frequent values in ``series`` (plus ``always_keep``).
+
+    ``k`` of ``None``/``<=0`` means "keep everything" (no cap). ``always_keep`` is
+    a set of values that are retained even if they fall outside the top-K (used to
+    preserve signal-bearing flagged domains). Only values present in ``series`` are
+    ever returned.
+    """
+    if series is None:
+        return set()
+    vals = series.dropna().astype(str)
+    if vals.empty:
+        return set()
+    counts = vals.value_counts()
+    if k is None or k <= 0 or len(counts) <= k:
+        return set(counts.index)
+    kept = set(counts.index[:k])
+    if always_keep:
+        kept |= (set(always_keep) & set(counts.index))
+    return kept
+
+
+def build_windowed_graph(logs, window_start, window_end, prior_days=60,
+                         max_url_nodes=None, max_file_nodes=None):
     """Build a PyG HeteroData graph for one time window with aggregated edges.
 
     Only events with ``window_start <= date <= window_end`` are included. For
@@ -2006,6 +2044,11 @@ def build_windowed_graph(logs, window_start, window_end, prior_days=60):
         window_start: Inclusive window start (timestamp-like).
         window_end: Inclusive window end (timestamp-like).
         prior_days: Days before the window scanned to flag new connections.
+        max_url_nodes: If set, cap URL nodes to this many most-frequent domains
+            per window (signal-bearing job/cloud/keylogger domains are always
+            kept). ``None`` keeps every domain. Bounds memory on large http logs.
+        max_file_nodes: If set, cap file nodes to this many most-frequently-copied
+            filenames per window. ``None`` keeps every file.
 
     Returns:
         A ``HeteroData`` with user/pc/url/file nodes, the five forward edge types
@@ -2053,9 +2096,22 @@ def build_windowed_graph(logs, window_start, window_end, prior_days=60):
     for df in (logon_w, device_w):
         if df is not None and 'pc' in df.columns:
             pcs.update(df['pc'].dropna().astype(str))
-    urls = set(http_w['_domain'].dropna().astype(str)) if http_w is not None else set()
-    files = set(file_w['filename'].dropna().astype(str)) if (
-        file_w is not None and 'filename' in file_w.columns) else set()
+    # URL/file node sets, optionally capped to the top-K most frequent per window
+    # to bound memory (the long tail of one-off domains/files dominates node count
+    # on r4.2-scale logs and carries little signal). Flagged domains are kept.
+    if http_w is not None:
+        _flagged_domains = {
+            d for d in http_w['_domain'].dropna().astype(str).unique()
+            if _win_domain_flag(d, CERT_JOB_DOMAINS)
+            or _win_domain_flag(d, CERT_CLOUD_DOMAINS)
+            or _win_domain_flag(d, CERT_KEYLOGGER_DOMAINS)
+        }
+        urls = _win_top_k_set(http_w['_domain'], max_url_nodes, always_keep=_flagged_domains)
+    else:
+        urls = set()
+    files = _win_top_k_set(
+        file_w['filename'], max_file_nodes,
+    ) if (file_w is not None and 'filename' in file_w.columns) else set()
 
     user_to_idx = {u: i for i, u in enumerate(sorted(users))}
     pc_to_idx = {p: i for i, p in enumerate(sorted(pcs))}
