@@ -45,7 +45,7 @@ from innersight.models.graph_encoder import GraphContextEncoder
 from innersight.models.losses import FocalLoss
 from innersight.models.temporal_encoder import TemporalPatternEncoder
 from innersight.scripts import compute_baselines
-from innersight.scripts.train_temporal import _DEFAULT_TRAINING, _build_scheduler
+from innersight.scripts.train_temporal import _DEFAULT_TRAINING, _build_scheduler, _resolve_device
 from innersight.training.evaluation import (
     compute_metrics,
     detection_latency,
@@ -58,7 +58,7 @@ from innersight.utils.reproducibility import seed_everything
 
 logger = logging.getLogger(__name__)
 
-_DEVICE = torch.device("cpu")  # CPU keeps cross-validation reproducible
+_DEVICE = torch.device("cpu")  # default; overridden by --device in main()
 
 _DEFAULT_TEMPORAL = {"in_channels": 18, "hidden": 64, "out_dim": 128, "dropout": 0.3, "kernel_size": 3}
 _DEFAULT_GRAPH = {"hidden_dim": 128, "num_layers": 2, "heads": 4, "dropout": 0.3}
@@ -95,6 +95,8 @@ def _chained_logits(model: ChainedTemporalGraph, windows: torch.Tensor,
     Returns:
         ``(n_samples, 1)`` logits in the order of ``windows``.
     """
+    windows = windows.to(_DEVICE)
+    graph = graph.to(_DEVICE)  # HeteroData → move node/edge tensors to the model's device
     temporal_emb = model.temporal(windows)                       # shape: (n_samples, 128)
     user_map = getattr(graph, "user_to_idx", {})
     n_user_nodes = graph["user"].x.shape[0]
@@ -104,7 +106,8 @@ def _chained_logits(model: ChainedTemporalGraph, windows: torch.Tensor,
         # No graph context available — fall back to the temporal embedding.
         return model.head(temporal_emb)                          # shape: (n_samples, 1)
 
-    rows = torch.tensor([user_map[sample_user_ids[i]] for i in in_graph], dtype=torch.long)
+    rows = torch.tensor([user_map[sample_user_ids[i]] for i in in_graph],
+                        dtype=torch.long, device=_DEVICE)
     # Inject the temporal embeddings into the user node matrix (grad flows to src).
     user_x = torch.zeros(n_user_nodes, temporal_emb.shape[1],
                          dtype=temporal_emb.dtype, device=temporal_emb.device)
@@ -116,7 +119,7 @@ def _chained_logits(model: ChainedTemporalGraph, windows: torch.Tensor,
 
     # Per-sample embedding: enriched for in-graph users, temporal-only otherwise.
     emb = temporal_emb.clone()
-    emb = emb.index_copy(0, torch.tensor(in_graph, dtype=torch.long), enriched[rows])
+    emb = emb.index_copy(0, torch.tensor(in_graph, dtype=torch.long, device=_DEVICE), enriched[rows])
     return model.head(emb)                                        # shape: (n_samples, 1)
 
 
@@ -272,7 +275,7 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
             graph = train_graphs.get(period)
             if graph is None or graph["user"].x.shape[0] == 0:
                 continue
-            targets = torch.tensor(y[pos], dtype=torch.float32).reshape(-1, 1)
+            targets = torch.tensor(y[pos], dtype=torch.float32, device=_DEVICE).reshape(-1, 1)
             optimizer.zero_grad(set_to_none=True)
             logits = _chained_logits(model, windows_t[pos], list(user_ids[pos]), graph)
             loss = criterion(logits, targets)
@@ -371,12 +374,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--max-file-nodes', type=int, default=2000, metavar='K',
                    help="Cap file nodes to the K most-copied filenames per window "
                         "(0 = no cap). Default: 2000.")
+    p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
+                   help="Compute device for the model: 'auto' = cuda>mps>cpu (default). "
+                        "Graph construction stays on CPU regardless.")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     setup_logging()
+    global _DEVICE
+    _DEVICE = _resolve_device(args.device)
+    logger.info("train_temporal_graph | device=%s", _DEVICE)
     temporal_cfg, graph_cfg, train_cfg, eval_cfg = _load_config(args.config)
     seeds = [int(s) for s in eval_cfg["seeds"]]
     n_folds = int(eval_cfg["n_folds"])

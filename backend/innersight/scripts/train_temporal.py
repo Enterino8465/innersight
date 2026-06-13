@@ -31,6 +31,7 @@ from innersight.data.answers import load_insiders
 from innersight.data.feature_store import FeatureStore
 from innersight.models.dataset import DeviationWindowDataset
 from innersight.models.losses import FocalLoss
+from innersight.models.mlp import get_device
 from innersight.models.temporal_encoder import TemporalPatternEncoder
 from innersight.scripts import compute_baselines
 from innersight.training.evaluation import (
@@ -45,7 +46,12 @@ from innersight.utils.reproducibility import seed_everything
 
 logger = logging.getLogger(__name__)
 
-_DEVICE = torch.device("cpu")  # CPU keeps cross-validation reproducible
+_DEVICE = torch.device("cpu")  # default; overridden by --device in main()
+
+
+def _resolve_device(name: str) -> torch.device:
+    """Resolve a --device string ('auto' → cuda>mps>cpu, else the named device)."""
+    return get_device() if name == "auto" else torch.device(name)
 
 # Defaults mirror configs/train_temporal.yaml (used when a key is absent).
 _DEFAULT_MODEL = {"in_channels": 18, "hidden": 64, "out_dim": 128, "dropout": 0.3, "kernel_size": 3}
@@ -234,6 +240,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help='Where to write the results JSON (default: temporal_results.json)')
     p.add_argument('--checkpoint-dir', default='checkpoints', metavar='PATH',
                    help="Directory for the model checkpoint (default: 'checkpoints')")
+    p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
+                   help="Compute device: 'auto' = cuda>mps>cpu (default). GPU is much "
+                        "faster; CPU is bit-for-bit reproducible.")
     return p.parse_args(argv)
 
 
@@ -297,6 +306,9 @@ def _log_baseline_comparison(output_path: Path, temporal_cv: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     setup_logging()
+    global _DEVICE
+    _DEVICE = _resolve_device(args.device)
+    logger.info("train_temporal | device=%s", _DEVICE)
     model_cfg, train_cfg, eval_cfg = _load_config(args.config)
     seeds = [int(s) for s in eval_cfg["seeds"]]
     n_folds = int(eval_cfg["n_folds"])

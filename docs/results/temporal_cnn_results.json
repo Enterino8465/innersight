@@ -1,0 +1,463 @@
+{
+  "version": "r4.2",
+  "model": "temporal_cnn",
+  "n_windows": 43651,
+  "n_positive": 125,
+  "n_folds": 5,
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "config": {
+    "model": {
+      "in_channels": 18,
+      "hidden": 64,
+      "out_dim": 128,
+      "dropout": 0.3,
+      "kernel_size": 3
+    },
+    "training": {
+      "focal_alpha": 0.75,
+      "focal_gamma": 2.0,
+      "lr": 0.001,
+      "weight_decay": 0.0001,
+      "grad_clip": 1.0,
+      "warmup_epochs": 5,
+      "eta_min": 1e-05,
+      "max_epochs": 100,
+      "patience": 10,
+      "batch_size": 64
+    }
+  },
+  "cross_validation": {
+    "per_seed": [
+      {
+        "seed": 42,
+        "mean": {
+          "auprc": 0.9968632862073937,
+          "auroc": 0.9999922893052664,
+          "f1_best": 0.9959183673469388,
+          "p_at_10": 1.0,
+          "p_at_20": 0.99,
+          "p_at_50": 0.5,
+          "median_days": -15.9
+        },
+        "std": {
+          "auprc": 0.006273427585212543,
+          "auroc": 1.5421389467196178e-05,
+          "f1_best": 0.008163265306122458,
+          "p_at_10": 0.0,
+          "p_at_20": 0.020000000000000018,
+          "p_at_50": 0.021908902300206663
+        }
+      },
+      {
+        "seed": 123,
+        "mean": {
+          "auprc": 0.9975683945124212,
+          "auroc": 0.9999917601037882,
+          "f1_best": 0.9886101694915255,
+          "p_at_10": 1.0,
+          "p_at_20": 1.0,
+          "p_at_50": 0.5,
+          "median_days": -16.9
+        },
+        "std": {
+          "auprc": 0.004311542034212736,
+          "auroc": 1.4590640529279094e-05,
+          "f1_best": 0.015739330207132304,
+          "p_at_10": 0.0,
+          "p_at_20": 0.0,
+          "p_at_50": 0.041952353926806046
+        }
+      },
+      {
+        "seed": 456,
+        "mean": {
+          "auprc": 0.9971255068958502,
+          "auroc": 0.9999926546539653,
+          "f1_best": 0.996078431372549,
+          "p_at_10": 1.0,
+          "p_at_20": 0.99,
+          "p_at_50": 0.5,
+          "median_days": -16.1
+        },
+        "std": {
+          "auprc": 0.005748986208299733,
+          "auroc": 1.4690692069319055e-05,
+          "f1_best": 0.007843137254901978,
+          "p_at_10": 0.0,
+          "p_at_20": 0.020000000000000018,
+          "p_at_50": 0.012649110640673528
+        }
+      }
+    ],
+    "mean": {
+      "auprc": 0.9971857292052216,
+      "auroc": 0.9999922346876732,
+      "f1_best": 0.9935356560703378,
+      "p_at_10": 1.0,
+      "p_at_20": 0.9933333333333333,
+      "p_at_50": 0.5,
+      "median_days": -16.3
+    },
+    "std": {
+      "auprc": 0.00029099195334143996,
+      "auroc": 3.672349982601075e-07,
+      "f1_best": 0.0034834579229666585,
+      "p_at_10": 0.0,
+      "p_at_20": 0.004714045207910321,
+      "p_at_50": 0.0,
+      "median_days": 0.43204937989385633
+    },
+    "per_fold": [
+      {
+        "seed": 42,
+        "fold": 0,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.7163276076316833,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -16.0
+      },
+      {
+        "seed": 42,
+        "fold": 1,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.6752956509590149,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -15.0
+      },
+      {
+        "seed": 42,
+        "fold": 2,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.7588199377059937,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -14.5
+      },
+      {
+        "seed": 42,
+        "fold": 3,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.7951870560646057,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.54,
+        "median_days": -19.5
+      },
+      {
+        "seed": 42,
+        "fold": 4,
+        "auprc": 0.9843164310369686,
+        "auroc": 0.999961446526332,
+        "f1_best": 0.9795918367346939,
+        "threshold_best": 0.17038865387439728,
+        "p_at_10": 1.0,
+        "p_at_20": 0.95,
+        "p_at_50": 0.48,
+        "median_days": -14.5
+      },
+      {
+        "seed": 123,
+        "fold": 0,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.26152005791664124,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.46,
+        "median_days": -15.0
+      },
+      {
+        "seed": 123,
+        "fold": 1,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.5821843147277832,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -15.0
+      },
+      {
+        "seed": 123,
+        "fold": 2,
+        "auprc": 0.9988505747126437,
+        "auroc": 0.999996061813771,
+        "f1_best": 0.983050847457627,
+        "threshold_best": 0.2129838913679123,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.58,
+        "median_days": -21.0
+      },
+      {
+        "seed": 123,
+        "fold": 3,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.6550041437149048,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -15.5
+      },
+      {
+        "seed": 123,
+        "fold": 4,
+        "auprc": 0.9889913978494626,
+        "auroc": 0.99996273870517,
+        "f1_best": 0.96,
+        "threshold_best": 0.18511469662189484,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -18.0
+      },
+      {
+        "seed": 456,
+        "fold": 0,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.6804342269897461,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -15.0
+      },
+      {
+        "seed": 456,
+        "fold": 1,
+        "auprc": 1.0000000000000002,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.525268018245697,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -17.0
+      },
+      {
+        "seed": 456,
+        "fold": 2,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.7362279295921326,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.52,
+        "median_days": -14.5
+      },
+      {
+        "seed": 456,
+        "fold": 3,
+        "auprc": 1.0000000000000002,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.5223358273506165,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -17.5
+      },
+      {
+        "seed": 456,
+        "fold": 4,
+        "auprc": 0.9856275344792508,
+        "auroc": 0.9999632732698267,
+        "f1_best": 0.9803921568627451,
+        "threshold_best": 0.20402200520038605,
+        "p_at_10": 1.0,
+        "p_at_20": 0.95,
+        "p_at_50": 0.5,
+        "median_days": -16.5
+      }
+    ]
+  },
+  "per_scenario": {
+    "2": {
+      "auprc": 0.993181553118072,
+      "auroc": 0.9999777604190598,
+      "f1_best": 0.97165991902834,
+      "threshold_best": 0.6752956509590149,
+      "p_at_10": 1.0,
+      "p_at_20": 1.0,
+      "p_at_50": 1.0
+    }
+  },
+  "detection_latency": {
+    "median_days": -16.0,
+    "p90_days": -14.0,
+    "detected_count": 29,
+    "total_insiders": 70,
+    "per_insider": [
+      {
+        "user_id": "AAF0535",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-06-11 00:00:00"
+      },
+      {
+        "user_id": "ABC0174",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-10-13 00:00:00"
+      },
+      {
+        "user_id": "AKR0057",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-09-21 00:00:00"
+      },
+      {
+        "user_id": "CCL0068",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "CEJ0109",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-24 00:00:00"
+      },
+      {
+        "user_id": "CQW0652",
+        "days_to_detect": -17.0,
+        "first_flagged_window": "2011-02-02 00:00:00"
+      },
+      {
+        "user_id": "DIB0285",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "DRR0162",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-10-29 00:00:00"
+      },
+      {
+        "user_id": "EDB0714",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-09-30 00:00:00"
+      },
+      {
+        "user_id": "EGD0132",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "FSC0601",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-04 00:00:00"
+      },
+      {
+        "user_id": "HBO0413",
+        "days_to_detect": -13.0,
+        "first_flagged_window": "2011-02-02 00:00:00"
+      },
+      {
+        "user_id": "HXL0968",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-08-11 00:00:00"
+      },
+      {
+        "user_id": "IJM0776",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-22 00:00:00"
+      },
+      {
+        "user_id": "IKR0401",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "IUB0565",
+        "days_to_detect": -16.0,
+        "first_flagged_window": "2010-09-21 00:00:00"
+      },
+      {
+        "user_id": "JJM0203",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-08-20 00:00:00"
+      },
+      {
+        "user_id": "KRL0501",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-11-09 00:00:00"
+      },
+      {
+        "user_id": "LCC0819",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-02 00:00:00"
+      },
+      {
+        "user_id": "MDH0580",
+        "days_to_detect": -26.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "NWT0098",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-24 00:00:00"
+      },
+      {
+        "user_id": "PNL0301",
+        "days_to_detect": -13.0,
+        "first_flagged_window": "2010-06-02 00:00:00"
+      },
+      {
+        "user_id": "PSF0133",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "RAR0725",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-22 00:00:00"
+      },
+      {
+        "user_id": "RHL0992",
+        "days_to_detect": -22.0,
+        "first_flagged_window": "2010-06-22 00:00:00"
+      },
+      {
+        "user_id": "RMW0542",
+        "days_to_detect": -20.0,
+        "first_flagged_window": "2010-06-02 00:00:00"
+      },
+      {
+        "user_id": "TNM0961",
+        "days_to_detect": -16.0,
+        "first_flagged_window": "2010-09-30 00:00:00"
+      },
+      {
+        "user_id": "VSS0154",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-08-20 00:00:00"
+      },
+      {
+        "user_id": "XHW0498",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-07-22 00:00:00"
+      }
+    ]
+  },
+  "oof_threshold": 0.6752956509590149,
+  "checkpoint": "/workspace/results_r4.2/checkpoints/temporal_cnn_r4.2.pt"
+}

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InnerSight — Folder Structure Explained</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a222d; --panel2:#222d3a; --ink:#e6edf3;
+    --muted:#9fb0c0; --accent:#5db0ff; --accent2:#7ee0a0; --warn:#ffcc66;
+    --danger:#ff8a80; --line:#2c3a4a; --code:#0b0f14; --chip:#243345;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{padding:34px 28px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#15202c,#0f1419);}
+  header h1{margin:0 0 6px;font-size:30px;letter-spacing:.3px}
+  header p{margin:4px 0;color:var(--muted);max-width:880px}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 0}
+  .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;
+    padding:4px 12px;font-size:13px;color:var(--muted)}
+  .chip b{color:var(--ink)}
+  h2{font-size:22px;margin:38px 0 6px;padding-bottom:8px;border-bottom:2px solid var(--accent)}
+  h2 .tag{font-size:12px;font-weight:600;color:var(--bg);background:var(--accent);
+    border-radius:6px;padding:2px 8px;margin-left:10px;vertical-align:middle}
+  h3{font-size:17px;margin:26px 0 4px}
+  .path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--accent2);font-size:14px}
+  .role{display:inline-block;font-size:12px;font-weight:600;border-radius:5px;
+    padding:1px 7px;margin-left:8px;vertical-align:middle}
+  .r-py{background:#1d3b2a;color:#7ee0a0}
+  .r-ts{background:#16314d;color:#7ec8ff}
+  .r-cfg{background:#3a3320;color:#ffcc66}
+  .r-data{background:#3a2030;color:#ff9ec4}
+  .r-gen{background:#2a2a35;color:#b9b9d6}
+  table{width:100%;border-collapse:collapse;margin:10px 0 4px;font-size:14.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.4px}
+  td code,p code,li code{font-family:ui-monospace,Menlo,Consolas,monospace;
+    background:var(--code);border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-size:13px;color:#cfe6ff}
+  .file{font-family:ui-monospace,Menlo,Consolas,monospace;color:#cfe6ff;white-space:nowrap}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin:14px 0}
+  .card.sub{background:var(--panel2)}
+  .tree{background:var(--code);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:13.5px;line-height:1.55;color:#cdd9e5;overflow:auto}
+  .tree .c{color:var(--muted)}
+  .tree .d{color:var(--accent)}
+  .note{border-left:3px solid var(--accent);background:#13202e;padding:10px 14px;
+    border-radius:0 8px 8px 0;margin:12px 0;color:#d4e3f0;font-size:14.5px}
+  .warn{border-left:3px solid var(--warn);background:#241f12}
+  .muted{color:var(--muted)}
+  .pill{font-size:12px;color:var(--muted)}
+  .toc{columns:2;column-gap:28px;margin:8px 0 0}
+  .toc a{color:var(--accent);text-decoration:none;display:block;padding:3px 0;font-size:14.5px}
+  .toc a:hover{text-decoration:underline}
+  .modtag{font-size:12px;font-weight:700;color:var(--bg);border-radius:5px;padding:1px 7px;margin-right:6px}
+  .m1{background:#7ee0a0}.m2{background:#7ec8ff}.m3{background:#c9a0ff}.m4{background:#ffcc66}
+  footer{color:var(--muted);font-size:13px;padding:24px 28px;border-top:1px solid var(--line);text-align:center}
+  @media(max-width:720px){.toc{columns:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1>InnerSight — Folder Structure Explained</h1>
+  <p>A guided map of every folder in the project, what it is for, and how it fits the
+  four-module pipeline. Built for exam prep: read top-to-bottom once, then use it as a lookup.</p>
+  <div class="legend">
+    <span class="chip"><b>Repo root:</b> <code style="background:none;border:none;color:#cfe6ff;padding:0">~/Developer/innersight</code></span>
+    <span class="chip"><span class="role r-py">Python</span> backend / ML</span>
+    <span class="chip"><span class="role r-ts">TS/React</span> frontend</span>
+    <span class="chip"><span class="role r-cfg">Config</span> build &amp; CI</span>
+    <span class="chip"><span class="role r-data">Data</span> datasets</span>
+    <span class="chip"><span class="role r-gen">Generated</span> artifacts</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <strong>The mental model in one sentence.</strong>
+    <p style="margin:8px 0 0">The repo splits into <b>three top-level pieces</b>:
+    <span class="path">backend/</span> (the Python brain — data pipeline + ML + API),
+    <span class="path">frontend/</span> (the React web UI the teacher will click through), and
+    <span class="path">data/</span> (the bundled demo dataset it runs on). Everything else at the
+    root — <span class="path">docs/</span>, <code>Makefile</code>, <code>docker-compose.yml</code>,
+    <span class="path">.github/</span> — is glue that builds, runs, documents, or tests those three.</p>
+  </div>
+
+  <h3 style="margin-top:22px">Jump to a section</h3>
+  <div class="toc">
+    <a href="#root">① Repo root — top-level files</a>
+    <a href="#backend">② backend/ — the Python service</a>
+    <a href="#innersight">③ backend/innersight/ — the package</a>
+    <a href="#data-pkg">&nbsp;&nbsp;• data/ — Module&nbsp;0: ingest</a>
+    <a href="#features">&nbsp;&nbsp;• features/ — daily fingerprints</a>
+    <a href="#models">&nbsp;&nbsp;• models/ — the 3 neural nets</a>
+    <a href="#scoring">&nbsp;&nbsp;• scoring/ — risk + look-alikes</a>
+    <a href="#training">&nbsp;&nbsp;• training/ — train &amp; evaluate</a>
+    <a href="#feedback">&nbsp;&nbsp;• feedback/ — analyst actions</a>
+    <a href="#utils">&nbsp;&nbsp;• utils/ — I/O &amp; reproducibility</a>
+    <a href="#configs">&nbsp;&nbsp;• configs/ — training recipes</a>
+    <a href="#scripts">&nbsp;&nbsp;• scripts/ — runnable entrypoints</a>
+    <a href="#tests">④ backend/tests/ — the test suite</a>
+    <a href="#checkpoints">⑤ backend/checkpoints/ — model weights</a>
+    <a href="#frontend">⑥ frontend/ — the React app</a>
+    <a href="#src">&nbsp;&nbsp;• src/ — pages, components, store</a>
+    <a href="#data-dir">⑦ data/ — bundled demo dataset</a>
+    <a href="#docs">⑧ docs/ — written documentation</a>
+    <a href="#github">⑨ .github/ — continuous integration</a>
+  </div>
+
+  <h3 style="margin-top:30px">The whole tree at a glance</h3>
+  <div class="tree">
+innersight/
+├── <span class="d">backend/</span>                  <span class="c"># Python service: data → ML → REST API</span>
+│   ├── <span class="d">innersight/</span>           <span class="c"># the installable Python package (all the logic)</span>
+│   │   ├── <span class="d">data/</span>           <span class="c"># Module 0: read CERT logs, normalize, cache</span>
+│   │   ├── <span class="d">features/</span>       <span class="c"># turn logs into 18 daily numbers per person</span>
+│   │   ├── <span class="d">models/</span>         <span class="c"># MLP, Temporal CNN, GNN, Fusion + losses</span>
+│   │   ├── <span class="d">scoring/</span>        <span class="c"># risk score + Qdrant look-alike search</span>
+│   │   ├── <span class="d">training/</span>       <span class="c"># trainer loop, evaluation, cross-version</span>
+│   │   ├── <span class="d">feedback/</span>       <span class="c"># analyst triage / correction logic</span>
+│   │   ├── <span class="d">utils/</span>          <span class="c"># I/O helpers + reproducibility (seeds)</span>
+│   │   ├── <span class="d">configs/</span>        <span class="c"># YAML training recipes (hyperparameters)</span>
+│   │   ├── <span class="d">scripts/</span>        <span class="c"># runnable CLI entrypoints (train/eval/etc.)</span>
+│   │   ├── api.py            <span class="c"># Flask REST API — what the frontend calls</span>
+│   │   ├── config.py         <span class="c"># central settings (paths, hours, thresholds)</span>
+│   │   └── schema.py         <span class="c"># canonical column definitions</span>
+│   ├── <span class="d">tests/</span>              <span class="c"># 200+ pytest tests (the "202 passing")</span>
+│   ├── <span class="d">checkpoints/</span>        <span class="c"># saved model weights (.pt) + demo outputs</span>
+│   ├── <span class="d">logs/</span>               <span class="c"># runtime log files</span>
+│   ├── Dockerfile           <span class="c"># builds the backend container</span>
+│   └── pyproject.toml       <span class="c"># package metadata + dependencies</span>
+├── <span class="d">frontend/</span>                 <span class="c"># React 19 + TypeScript web UI (served by nginx)</span>
+│   └── <span class="d">src/</span>                <span class="c"># pages/, components/, store/ (Redux)</span>
+├── <span class="d">data/</span>                     <span class="c"># bundled synthetic demo dataset (5 users, 1 insider)</span>
+├── <span class="d">docs/</span>                     <span class="c"># written docs, phase walkthroughs, context files</span>
+├── <span class="d">.github/</span>                  <span class="c"># CI config (runs tests on every push)</span>
+├── Makefile                 <span class="c"># shortcuts: make demo / test / lint / train-quick</span>
+├── docker-compose.yml       <span class="c"># wires up 3 containers: backend, frontend, qdrant</span>
+└── README.md                <span class="c"># project overview + quick start</span>
+  </div>
+
+  <!-- ================= ROOT ================= -->
+  <h2 id="root">① Repo root <span class="tag">top-level files</span></h2>
+  <p>These files don't contain app logic — they describe how to <b>build, run, document and test</b>
+  the three real folders. Worth knowing because the teacher runs the project from here.</p>
+  <table>
+    <tr><th>File</th><th>What it does</th></tr>
+    <tr><td class="file">Makefile</td><td>Friendly command shortcuts. <code>make demo</code> builds &amp; starts everything via Docker, waits for the backend health check, then exposes the app on <code>localhost:3000</code>. Also <code>make test</code>, <code>make lint</code>, <code>make train-quick</code>, <code>make stop</code>, <code>make clean</code>.</td></tr>
+    <tr><td class="file">docker-compose.yml</td><td>Defines the <b>3 services</b> that make up the running system and how they connect: <code>backend</code> (Flask, port 5001), <code>frontend</code> (nginx, port 3000), and <code>qdrant</code> (vector DB, port 6333). The frontend waits for the backend to be healthy; the backend waits for Qdrant.</td></tr>
+    <tr><td class="file">README.md</td><td>The front-door overview: what InnerSight is, the four-module architecture, quick-start, and what each page of the UI shows.</td></tr>
+    <tr><td class="file">.env / .env.example</td><td>Environment variables (e.g. data dir, model dir). <code>.env.example</code> is the template you copy; <code>.env</code> is your real (gitignored) one.</td></tr>
+    <tr><td class="file">.gitignore / .dockerignore</td><td>Lists files Git and Docker should ignore (caches, weights, <code>node_modules</code>, the big dataset).</td></tr>
+    <tr><td class="file">.ruff_cache/</td><td><span class="role r-gen">Generated</span> Cache from the <b>ruff</b> Python linter. Not source code — safe to ignore/delete.</td></tr>
+  </table>
+
+  <!-- ================= BACKEND ================= -->
+  <h2 id="backend">② backend/ <span class="tag">the Python service</span></h2>
+  <p>Everything server-side: reading the data, the machine-learning models, training, and the
+  REST API the web UI talks to. This is where most of "every line of code" lives.</p>
+  <table>
+    <tr><th>Item</th><th>Purpose</th></tr>
+    <tr><td class="file">innersight/</td><td>The actual Python <b>package</b> — all the importable logic. Covered in detail in §③ below. You install it with <code>pip install -e .</code> and then write <code>from innersight.X import Y</code>.</td></tr>
+    <tr><td class="file">tests/</td><td>The pytest test suite (§④). This is the "202 tests passing" headline number.</td></tr>
+    <tr><td class="file">checkpoints/</td><td>Saved model weights and demo outputs (§⑤). Mounted into the container as <code>/models</code>.</td></tr>
+    <tr><td class="file">logs/</td><td><span class="role r-gen">Generated</span> Runtime log output written while the service runs.</td></tr>
+    <tr><td class="file">Dockerfile</td><td>Recipe to build the backend into a container image (install Python deps, copy code, set the entrypoint).</td></tr>
+    <tr><td class="file">docker-entrypoint.sh</td><td>The startup script the container runs — boots the Flask API (and any warm-up) when the container launches.</td></tr>
+    <tr><td class="file">pyproject.toml</td><td>Package metadata + the full dependency list (pandas, numpy, torch, flask, qdrant-client, etc.) + tool config (ruff, pytest).</td></tr>
+    <tr><td class="file">innersight.egg-info/</td><td><span class="role r-gen">Generated</span> Auto-created by <code>pip install -e .</code>. Just install metadata — not something you wrote.</td></tr>
+    <tr><td class="file">.venv/</td><td><span class="role r-gen">Generated</span> The local Python virtual environment (installed libraries). Never edited by hand.</td></tr>
+  </table>
+
+  <!-- ================= PACKAGE ================= -->
+  <h2 id="innersight">③ backend/innersight/ <span class="tag">the package — the heart of the project</span></h2>
+  <p>This is the codebase you must know line-by-line. It is organized to mirror the
+  <b>four-module pipeline</b>: ingest → features → models → scoring, plus the API that ties it together.</p>
+
+  <div class="card sub">
+    <strong>Three files sit at the top level of the package:</strong>
+    <table>
+      <tr><th>File</th><th>Purpose</th></tr>
+      <tr><td class="file">api.py</td><td><b>The Flask REST API</b> — the single most important file to know. Every button in the UI calls an endpoint here (alerts, employees, investigation, suspect search, training, model comparison). Contains <code>_generate_demo_alerts()</code> (the live statistical scoring path) and <code>_get_model()</code> (loads a trained <code>.pt</code> if one exists, otherwise logs "No trained model found").</td></tr>
+      <tr><td class="file">config.py</td><td>Central configuration: file paths, business-hours window (07:00–19:00), internal domain (<code>dtaa.com</code>), risk thresholds, the list of 18 features. Change a constant here and the whole pipeline follows.</td></tr>
+      <tr><td class="file">schema.py</td><td>Defines the <b>canonical column layout</b> every dataset version is normalized to (logon/device/email/http/file/LDAP/psychometric). The adapters target this schema.</td></tr>
+    </table>
+  </div>
+
+  <h3 id="data-pkg"><span class="modtag m1">M0</span> data/ — read &amp; normalize the logs <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/data/</p>
+  <p>Module 0 / Stage 1: get raw CERT CSVs into a clean, uniform table. This folder is the
+  reason the project can handle all 10 dataset versions despite their differing schemas.</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">loaders.py</td><td>Reads the raw CSV log files (logon, device, email, http, file, LDAP, psychometric) into pandas DataFrames.</td></tr>
+    <tr><td class="file">adapters.py</td><td><b>The version-adapter layer.</b> Each CERT version (r1–r6.2) has slightly different columns/encodings; adapters detect the version by "fingerprint" and translate it into the one canonical schema (strip <code>DTAA/</code> prefix, normalize <code>Insert→Connect</code>, add missing headers, etc.).</td></tr>
+    <tr><td class="file">pipeline.py</td><td>Orchestrates the whole ingest: load → adapt → combine → hand off. The end-to-end "universal pipeline."</td></tr>
+    <tr><td class="file">feature_store.py</td><td>Caches computed results to <b>Parquet</b> (via pyarrow) so the expensive ingest/feature step runs once, not every request.</td></tr>
+    <tr><td class="file">answers.py</td><td>Loads the ground-truth labels (<code>insiders.csv</code> — who is an insider, when, which scenario) so models can be trained/evaluated.</td></tr>
+  </table>
+
+  <h3 id="features"><span class="modtag m1">M1</span> features/ — daily behavioral fingerprints <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/features/</p>
+  <p>Turns the cleaned logs into the <b>18 daily numbers per person</b> — the input every model consumes.</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">features.py</td><td>Computes the 18 daily features per user (logon counts, after-hours logons, USB copies, external emails, large attachments, job-site visits, cloud-upload visits, etc.) using pandas group-by + datetime logic.</td></tr>
+    <tr><td class="file">temporal_features.py</td><td>Builds the <b>28-day sliding windows</b> (stride 7) out of those daily features — the time-series format the Temporal CNN reads.</td></tr>
+  </table>
+  <div class="note">The per-user statistical baseline (EMA + z-scores) — Module 1 in the slides — is the path that drives <b>live demo scoring today</b>. The deviation math itself lives close to features/scoring; the trained models below are the "powerful but not-yet-trained" path.</div>
+
+  <h3 id="models"><span class="modtag m2">M2</span><span class="modtag m3">M3</span><span class="modtag m4">M4</span> models/ — the three neural networks <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/models/</p>
+  <p>The deep-learning core. Know how these connect: <b>CNN runs first → its embedding seeds the
+  graph → GNN refines it → fusion concatenates everything → an MLP head outputs the risk score.</b>
+  A separate plain MLP is the baseline to beat.</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">mlp.py</td><td><b>Standalone MLP baseline</b> (~<code>18→64→32→1</code>). Sees one day at a time, no sense of time. Its job is to be the floor the fancier models must beat. <i>Not</i> fused into the final model.</td></tr>
+    <tr><td class="file">temporal_encoder.py</td><td><b>Temporal CNN</b> (<code>TemporalPatternEncoder</code>). Causal, dilated convolutions slide across the 28-day window to detect patterns of change (escalation, bursts). Outputs a 128-dim embedding + an attention map (which days mattered → interpretability).</td></tr>
+    <tr><td class="file">graph_builder.py</td><td>Builds the interaction <b>graph</b> from the logs: 4 node types (user, pc, url, file) and 5 edge types + reverses = 10. Seeds user-nodes with placeholder zeros that the CNN embeddings later replace.</td></tr>
+    <tr><td class="file">graph_schema.py</td><td>Defines the graph's typed structure (node/edge type definitions and their feature layouts).</td></tr>
+    <tr><td class="file">graph_encoder.py</td><td><b>GNN</b> (<code>GraphContextEncoder</code>, GATv2). Attention-based message passing refines each user's temporal embedding with relational context (e.g. sharing a copied file with someone emailing a competitor). Outputs a 128-dim embedding.</td></tr>
+    <tr><td class="file">fusion_model.py</td><td><b>The full model</b> (<code>InsiderThreatDetector</code>). Concatenates CNN(128) + GNN(128) + static(16) = <b>272-dim</b> vector, then a classification head <code>272→128→64→1</code> outputs the final risk score. (Static = OCEAN personality 5 + role 8 + department 3.)</td></tr>
+    <tr><td class="file">losses.py</td><td><b>Focal loss</b> (α=0.75, γ=2.0) and friends — chosen because positives are ~0.4% of data, so plain accuracy is useless.</td></tr>
+    <tr><td class="file">baseline.py</td><td>Non-neural baselines / the statistical baseline scaffolding used for comparison.</td></tr>
+    <tr><td class="file">dataset.py</td><td>PyTorch <code>Dataset</code>/<code>DataLoader</code> wrappers that feed windows + labels to the training loop.</td></tr>
+  </table>
+
+  <h3 id="scoring"><span class="modtag m1">M1</span> scoring/ — risk scores &amp; look-alikes <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/scoring/</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">scoring.py</td><td>Turns deviations (z-scores) or model outputs into a <b>0–1 risk score</b>, applies the alert threshold, and assembles the explainable top-contributing-feature list.</td></tr>
+    <tr><td class="file">suspect_discovery.py</td><td><b>Stage 5 / look-alike search.</b> Given one suspect, runs k-nearest-neighbor search over behavioral embeddings in <b>Qdrant</b> to find users behaving similarly.</td></tr>
+  </table>
+
+  <h3 id="training"><span class="modtag m2">M2</span><span class="modtag m3">M3</span><span class="modtag m4">M4</span> training/ — train &amp; evaluate <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/training/</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">trainer.py</td><td>The training loop: optimizer, epochs, focal loss, checkpointing — produces the <code>.pt</code> weight files.</td></tr>
+    <tr><td class="file">evaluation.py</td><td>Computes metrics, above all <b>AUPRC</b> (the right metric for 0.4% positives), plus confusion matrix, precision/recall used on the Training and Model Comparison pages.</td></tr>
+    <tr><td class="file">cross_version.py</td><td>Train on one CERT version, test on another (generalization test, e.g. train r4.2 → test r6.2).</td></tr>
+  </table>
+
+  <h3 id="feedback">feedback/ — analyst actions <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/feedback/</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">feedback.py</td><td>Handles analyst triage decisions from the Investigation page — confirming/dismissing alerts, blocking users, and recording corrections (these land in <code>checkpoints/corrections.json</code> and <code>block_log.json</code>).</td></tr>
+  </table>
+
+  <h3 id="utils">utils/ — shared helpers <span class="role r-py">Python</span></h3>
+  <p class="path">backend/innersight/utils/</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">io.py</td><td>Small file-reading/writing helpers used across the package (load/save JSON, Parquet, checkpoints).</td></tr>
+    <tr><td class="file">reproducibility.py</td><td>Seeds RNGs (numpy, torch, python) so training runs are repeatable — important for a thesis (3 seeds story).</td></tr>
+  </table>
+
+  <h3 id="configs">configs/ — training recipes <span class="role r-cfg">Config</span></h3>
+  <p class="path">backend/innersight/configs/</p>
+  <p>YAML files holding hyperparameters for each rung of the progressive ladder. No logic — just settings the scripts read.</p>
+  <table>
+    <tr><th>File</th><th>Trains…</th></tr>
+    <tr><td class="file">train_baseline_mlp.yaml</td><td>The standalone MLP baseline.</td></tr>
+    <tr><td class="file">train_temporal.yaml</td><td>The Temporal CNN.</td></tr>
+    <tr><td class="file">train_temporal_graph.yaml</td><td>The CNN+GNN combination.</td></tr>
+    <tr><td class="file">train_fusion.yaml</td><td>The full fusion model.</td></tr>
+  </table>
+
+  <h3 id="scripts">scripts/ — runnable entrypoints <span class="role r-py">Python</span> <span class="role r-cfg">shell</span></h3>
+  <p class="path">backend/innersight/scripts/</p>
+  <p>The "verbs" of the project — files you actually run from the command line to train, evaluate, or
+  manage embeddings. The library folders above are imported <i>by</i> these.</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">train_mlp_baseline.py</td><td>Train the MLP baseline (ladder step 1).</td></tr>
+    <tr><td class="file">train_temporal.py</td><td>Train the Temporal CNN (step 2).</td></tr>
+    <tr><td class="file">train_temporal_graph.py</td><td>Train CNN+GNN (step 3).</td></tr>
+    <tr><td class="file">train_fusion.py</td><td>Train the full fusion model (step 4).</td></tr>
+    <tr><td class="file">run_all_training.sh</td><td>Runs the whole ladder end-to-end (used by <code>make train-quick</code> and the GPU run).</td></tr>
+    <tr><td class="file">compute_baselines.py / validate_baselines.py / compare_baselines.py</td><td>Build, sanity-check, and compare the statistical/per-user baselines.</td></tr>
+    <tr><td class="file">xgboost_baseline.py</td><td>An XGBoost baseline (a strong non-deep comparison point).</td></tr>
+    <tr><td class="file">evaluate_temporal.py / evaluate_graph.py</td><td>Evaluate the CNN / GNN models on held-out data.</td></tr>
+    <tr><td class="file">eval_cross_version.py</td><td>Run the train-on-one-version, test-on-another generalization check.</td></tr>
+    <tr><td class="file">extract_embeddings.py / sync_embeddings.py</td><td>Pull trained embeddings out of the models and push them into Qdrant (powers Suspect Discovery).</td></tr>
+    <tr><td class="file">visualize_attention.py</td><td>Render the CNN's day-level attention (the attention timeline / interpretability figure).</td></tr>
+    <tr><td class="file">download_checkpoints.sh / reproduce.sh</td><td>Fetch pre-trained weights / reproduce the full results pipeline.</td></tr>
+  </table>
+
+  <!-- ================= TESTS ================= -->
+  <h2 id="tests">④ backend/tests/ <span class="tag">the test suite</span></h2>
+  <p>30+ test files, the source of the "202 tests passing" claim. The pattern is one
+  <code>test_X.py</code> per source module, plus integration tests that exercise whole pipelines.
+  Strong material to point at when defending engineering quality.</p>
+  <table>
+    <tr><th>Group</th><th>Examples &amp; what they verify</th></tr>
+    <tr><td><b>Unit tests</b></td><td><code>test_adapters.py</code>, <code>test_features.py</code>, <code>test_mlp.py</code>, <code>test_temporal_encoder.py</code>, <code>test_graph_encoder.py</code>, <code>test_losses.py</code>, <code>test_scoring.py</code> — each checks one module in isolation.</td></tr>
+    <tr><td><b>Integration tests</b></td><td><code>test_integration_pipeline.py</code>, <code>test_integration_temporal.py</code>, <code>test_integration_graph.py</code>, <code>test_integration_fusion.py</code> — check that stages work together end-to-end.</td></tr>
+    <tr><td><b>API / infra</b></td><td><code>test_api.py</code>, <code>smoke_test_api.py</code> (the API responds correctly), <code>test_qdrant.py</code> (vector search), <code>test_reproducibility.py</code> (seeds give identical results).</td></tr>
+    <tr><td><b>conftest.py</b></td><td>Shared pytest fixtures (sample data, temp dirs) reused across all tests.</td></tr>
+  </table>
+
+  <!-- ================= CHECKPOINTS ================= -->
+  <h2 id="checkpoints">⑤ backend/checkpoints/ <span class="tag">model weights &amp; demo state</span></h2>
+  <p>Where trained models and runtime state are saved. <span class="role r-gen">Generated</span> — these are
+  outputs, not source. Mounted into the backend container as <code>/models</code>.</p>
+  <table>
+    <tr><th>Item</th><th>What it is</th></tr>
+    <tr><td class="file">*.pt</td><td>PyTorch weight files: <code>best_model.pt</code>, <code>gnn_embeddings.pt</code>, <code>node2vec_embeddings.pt</code>, <code>metapath2vec_embeddings.pt</code>, <code>standardizer.pt</code>, etc. If a relevant <code>.pt</code> is missing, <code>api.py</code> falls back to the statistical baseline and logs "No trained model found."</td></tr>
+    <tr><td class="file">alerts.json</td><td>Cached alert output served to the Alerts page.</td></tr>
+    <tr><td class="file">corrections.json / block_log.json</td><td>Persisted analyst feedback (confirmed/dismissed alerts, blocked users) from the feedback module.</td></tr>
+    <tr><td class="file">graphsage/ · n2v/ · m2v/ · flat/ · graphs/</td><td>Subfolders holding graph-embedding artifacts for the different embedding methods (GraphSAGE, node2vec, metapath2vec) and the built graphs.</td></tr>
+  </table>
+  <div class="note warn"><b>Exam-relevant:</b> the presence/absence of files here is exactly what separates "runs live on the statistical baseline today" from "the trained deep models." If the teacher runs the demo with no fresh <code>.pt</code>, the Model Comparison / attention views show illustrative structure, not trained numbers.</div>
+
+  <!-- ================= FRONTEND ================= -->
+  <h2 id="frontend">⑥ frontend/ <span class="tag">the React web UI</span></h2>
+  <p>The browser app the teacher clicks through (React 19 + TypeScript, built by Vite, served by
+  nginx). It holds <b>no detection logic</b> — it only calls the backend API and draws the results.</p>
+  <table>
+    <tr><th>Item</th><th>Purpose</th></tr>
+    <tr><td class="file">src/</td><td>All the UI source code (§ below).</td></tr>
+    <tr><td class="file">index.html</td><td>The single HTML page React mounts into.</td></tr>
+    <tr><td class="file">package.json / package-lock.json / bun.lock</td><td>Frontend dependency lists (React, Redux, Recharts, d3-force, styled-components) and exact locked versions.</td></tr>
+    <tr><td class="file">vite.config.ts</td><td>Build-tool config (dev server, bundling, API proxy).</td></tr>
+    <tr><td class="file">tsconfig*.json</td><td>TypeScript compiler settings.</td></tr>
+    <tr><td class="file">eslint.config.js</td><td>Frontend linter rules.</td></tr>
+    <tr><td class="file">nginx.conf</td><td>Web-server config that serves the built app and proxies API calls to the backend.</td></tr>
+    <tr><td class="file">Dockerfile</td><td>Builds the frontend into a container (compile with Vite, serve with nginx).</td></tr>
+    <tr><td class="file">CLAUDE.md / README.md</td><td>Frontend-specific notes.</td></tr>
+    <tr><td class="file">dist/</td><td><span class="role r-gen">Generated</span> The compiled production build.</td></tr>
+    <tr><td class="file">node_modules/</td><td><span class="role r-gen">Generated</span> Installed npm packages. Huge, never edited, gitignored.</td></tr>
+  </table>
+
+  <h3 id="src">frontend/src/ — the app itself <span class="role r-ts">TS/React</span></h3>
+  <p>Organized into <b>pages</b> (one per screen in the navbar), reusable <b>components</b>, and a Redux
+  <b>store</b> for shared state. Each page/component folder follows the same convention:
+  an <code>index.tsx</code> (the logic/markup), a <code>styled/</code> folder (styled-components styling),
+  and often a <code>hooks/</code> folder (data-fetching logic).</p>
+  <table>
+    <tr><th>Folder</th><th>Purpose</th></tr>
+    <tr><td class="file">App.tsx / main.tsx</td><td>Entry points: <code>main.tsx</code> boots React; <code>App.tsx</code> sets up routing between pages.</td></tr>
+    <tr><td class="file">pages/Alerts/</td><td>Ranked threat alerts with one-click triage.</td></tr>
+    <tr><td class="file">pages/Employees/</td><td>Directory of all users with current risk levels.</td></tr>
+    <tr><td class="file">pages/Investigation/</td><td>The deep-dive screen. Sub-folders: <code>ActivityTimeline/</code>, <code>ScoreHistoryChart/</code>, <code>ActionButtons/</code>, <code>ConfirmDialog/</code> — the deviation heatmap, per-feature breakdown, timeline, and graph neighborhood live here.</td></tr>
+    <tr><td class="file">pages/SuspectDiscovery/</td><td>k-NN look-alike search UI (backed by Qdrant).</td></tr>
+    <tr><td class="file">pages/ModelComparison/</td><td>The progressive-ladder results comparison.</td></tr>
+    <tr><td class="file">pages/Training/</td><td>Live training page. Sub-folders: <code>TrainingControls/</code>, <code>TrainingConfig/</code>, <code>MetricsChart/</code>, <code>ConfusionMatrix/</code>.</td></tr>
+    <tr><td class="file">pages/NotFound/</td><td>404 page.</td></tr>
+    <tr><td class="file">components/</td><td>Reusable pieces shared across pages: <code>Navbar/</code>, <code>DeviationHeatmap/</code>, <code>AttentionTimeline/</code>, <code>GraphNeighborhood/</code>, <code>Spinner/</code>, <code>ErrorBoundary/</code>.</td></tr>
+    <tr><td class="file">store/</td><td>Redux state. <code>store.ts</code> + <code>hooks.ts</code> wire it up; <code>slices/</code> holds one slice per domain: <code>alertsSlice</code>, <code>employeesSlice</code>, <code>investigationSlice</code>, <code>trainingSlice</code>, <code>uiSlice</code>.</td></tr>
+  </table>
+
+  <!-- ================= DATA ================= -->
+  <h2 id="data-dir">⑦ data/ <span class="tag">bundled demo dataset</span></h2>
+  <p class="path">data/synthetic_demo/</p>
+  <p>A tiny self-contained slice of the CERT data (5 users, 1 insider) shipped <b>inside the repo</b>
+  so <code>make demo</code> works instantly with no 16 GB download. Same CSV schema as the real r4.2 set.</p>
+  <table>
+    <tr><th>File</th><th>Contents</th></tr>
+    <tr><td class="file">logon.csv / device.csv / email.csv / http.csv / file.csv / psychometric.csv</td><td>The activity logs for the 5 demo users (logons, USB, emails, browsing, file copies, OCEAN personality).</td></tr>
+    <tr><td class="file">LDAP/2010-01.csv</td><td>The org chart snapshot (roles, departments, supervisors).</td></tr>
+    <tr><td class="file">answers/insiders.csv</td><td>Ground truth — which demo user is the insider, when, and which scenario.</td></tr>
+    <tr><td class="file">README.md</td><td>Notes on the demo dataset.</td></tr>
+  </table>
+  <div class="note">The <b>real</b> full CERT dataset lives on an external drive, not in the repo (see <code>docs/DATASET_CONTEXT.md</code>). This folder is only the demo slice. Swapping to real data is done via the volume mount in <code>docker-compose.yml</code>.</div>
+
+  <!-- ================= DOCS ================= -->
+  <h2 id="docs">⑧ docs/ <span class="tag">written documentation</span></h2>
+  <p>No code — the written record of the project. Your exam-prep companions live here.</p>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td class="file">CONTEXT_PRESENTATION_PREP.md</td><td>The short "what it does + how + honest status" presentation companion.</td></tr>
+    <tr><td class="file">CONTEXT_FOR_NEW_CONVERSATION.md</td><td>Full project state — the master context dump.</td></tr>
+    <tr><td class="file">DATASET_CONTEXT.md</td><td>Complete CERT dataset reference (versions, schemas, scenarios, quirks).</td></tr>
+    <tr><td class="file">PHASE7_VERIFICATION.md</td><td>Verification notes for what's done up to Phase 7.</td></tr>
+    <tr><td class="file">Phase0_Remaining_Tasks · Phase1_Universal_Data_Pipeline (.md/.html)</td><td>Phase-by-phase planning/walkthrough documents.</td></tr>
+    <tr><td class="file">literature_targets.md</td><td>The target AUPRC numbers from the literature each ladder rung aims for.</td></tr>
+    <tr><td class="file">FOLDER_STRUCTURE_EXPLAINED.html</td><td>← This file.</td></tr>
+  </table>
+
+  <!-- ================= GITHUB ================= -->
+  <h2 id="github">⑨ .github/ <span class="tag">continuous integration</span></h2>
+  <p class="path">.github/workflows/ci.yml</p>
+  <p>GitHub Actions config. On every push it automatically installs deps, lints, and runs the test
+  suite — so a broken commit is caught immediately. Good evidence of engineering discipline if asked.</p>
+
+  <div class="card" style="margin-top:34px">
+    <strong>One-paragraph recap to say out loud.</strong>
+    <p style="margin:8px 0 0">"The repo has three real parts. <b>backend/innersight/</b> is the Python package, laid
+    out as the pipeline runs: <b>data/</b> ingests and normalizes the CERT logs, <b>features/</b>
+    turns them into 18 daily numbers, <b>models/</b> holds the MLP baseline plus the Temporal CNN,
+    the GATv2 GNN and the fusion model, <b>scoring/</b> produces the risk score and the Qdrant
+    look-alike search, and <b>training/</b> trains and evaluates them; <b>api.py</b> exposes it all
+    over Flask. <b>frontend/src/</b> is the React UI — one folder per page — that just calls that API.
+    <b>data/synthetic_demo/</b> is the bundled dataset it runs on. Everything else — Makefile,
+    docker-compose, tests, checkpoints, docs, CI — builds, runs, verifies or documents those three."</p>
+  </div>
+
+</div>
+
+<footer>
+  InnerSight folder map · generated for exam preparation · reflects the repository on disk
+</footer>
+</body>
+</html>

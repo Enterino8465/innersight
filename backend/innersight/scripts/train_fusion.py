@@ -35,7 +35,7 @@ from innersight.models.dataset import DeviationWindowDataset
 from innersight.models.fusion_model import InsiderThreatDetector
 from innersight.models.losses import FocalLoss
 from innersight.scripts import compute_baselines
-from innersight.scripts.train_temporal import _DEFAULT_TRAINING, _build_scheduler
+from innersight.scripts.train_temporal import _DEFAULT_TRAINING, _build_scheduler, _resolve_device
 from innersight.scripts.train_temporal_graph import (
     _DEFAULT_EVAL,
     _DEFAULT_GRAPH,
@@ -56,7 +56,7 @@ from innersight.utils.reproducibility import seed_everything
 
 logger = logging.getLogger(__name__)
 
-_DEVICE = torch.device("cpu")
+_DEVICE = torch.device("cpu")  # default; overridden by --device in main()
 _OCEAN_COLS = ("O", "C", "E", "A", "N")
 _UNKNOWN = 0  # reserved embedding index for unknown role/department
 
@@ -109,6 +109,8 @@ def _fusion_logits(model, windows, sample_user_ids, graph, ocean, roles, depts) 
     and adds the static context, using the model's submodules so users absent
     from the graph get a temporal-only (zero graph part) embedding.
     """
+    windows = windows.to(_DEVICE)
+    graph = graph.to(_DEVICE)  # HeteroData → model's device
     temporal_emb = model.temporal(windows)                       # shape: (n, 128)
     user_map = getattr(graph, "user_to_idx", {})
     n_user_nodes = graph["user"].x.shape[0]
@@ -116,13 +118,15 @@ def _fusion_logits(model, windows, sample_user_ids, graph, ocean, roles, depts) 
     graph_emb = torch.zeros_like(temporal_emb)                   # shape: (n, 128)
     in_graph = [i for i, u in enumerate(sample_user_ids) if u in user_map]
     if n_user_nodes > 0 and in_graph:
-        rows = torch.tensor([user_map[sample_user_ids[i]] for i in in_graph], dtype=torch.long)
+        rows = torch.tensor([user_map[sample_user_ids[i]] for i in in_graph],
+                            dtype=torch.long, device=_DEVICE)
         user_x = torch.zeros(n_user_nodes, temporal_emb.shape[1],
                              dtype=temporal_emb.dtype, device=temporal_emb.device)
         user_x = user_x.index_copy(0, rows, temporal_emb[in_graph])
         enriched = model.graph({**graph.x_dict, "user": user_x},
                                graph.edge_index_dict, graph.edge_attr_dict)["user"]
-        graph_emb = graph_emb.index_copy(0, torch.tensor(in_graph, dtype=torch.long), enriched[rows])
+        graph_emb = graph_emb.index_copy(
+            0, torch.tensor(in_graph, dtype=torch.long, device=_DEVICE), enriched[rows])
 
     static = torch.cat([ocean, model.role_emb(roles), model.dept_emb(depts)], dim=1)  # (n, 16)
     fused = torch.cat([temporal_emb, graph_emb, static], dim=1)  # shape: (n, 272)
@@ -131,9 +135,9 @@ def _fusion_logits(model, windows, sample_user_ids, graph, ocean, roles, depts) 
 
 def _slice_static(registry, positions):
     return (
-        torch.tensor(registry["ocean"][positions], dtype=torch.float32),
-        torch.tensor(registry["roles"][positions], dtype=torch.long),
-        torch.tensor(registry["depts"][positions], dtype=torch.long),
+        torch.tensor(registry["ocean"][positions], dtype=torch.float32, device=_DEVICE),
+        torch.tensor(registry["roles"][positions], dtype=torch.long, device=_DEVICE),
+        torch.tensor(registry["depts"][positions], dtype=torch.long, device=_DEVICE),
     )
 
 
@@ -194,7 +198,7 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
             if graph is None or graph["user"].x.shape[0] == 0:
                 continue
             ocean, roles, depts = _slice_static(registry, pos)
-            targets = torch.tensor(y[pos], dtype=torch.float32).reshape(-1, 1)
+            targets = torch.tensor(y[pos], dtype=torch.float32, device=_DEVICE).reshape(-1, 1)
             optimizer.zero_grad(set_to_none=True)
             logits = _fusion_logits(model, windows_t[pos], list(user_ids[pos]), graph, ocean, roles, depts)
             loss = criterion(logits, targets)
@@ -275,12 +279,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Directory for the model checkpoint (default: 'checkpoints')")
     p.add_argument('--baseline-results-dir', default='.', metavar='PATH',
                    help="Directory holding prior-phase result JSONs (default: '.')")
+    p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
+                   help="Compute device for the model: 'auto' = cuda>mps>cpu (default). "
+                        "Graph construction stays on CPU regardless.")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     setup_logging()
+    global _DEVICE
+    _DEVICE = _resolve_device(args.device)
+    logger.info("train_fusion | device=%s", _DEVICE)
     temporal_cfg, graph_cfg, head_dropout, train_cfg, eval_cfg = _load_config(args.config)
     seeds = [int(s) for s in eval_cfg["seeds"]]
     n_folds = int(eval_cfg["n_folds"])

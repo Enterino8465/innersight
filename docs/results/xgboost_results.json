@@ -1,0 +1,522 @@
+{
+  "version": "r4.2",
+  "n_windows": 43651,
+  "n_positive": 125,
+  "n_folds": 5,
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "cross_validation": {
+    "per_seed": [
+      {
+        "seed": 42,
+        "mean": {
+          "auprc": 0.9813852152538102,
+          "auroc": 0.9998658689251257,
+          "f1_best": 0.9700445969125214,
+          "p_at_10": 1.0,
+          "p_at_20": 0.99,
+          "p_at_50": 0.496,
+          "median_days": -15.6
+        },
+        "std": {
+          "auprc": 0.02603342715587245,
+          "auroc": 0.00022997485699337495,
+          "f1_best": 0.03386393513830445,
+          "p_at_10": 0.0,
+          "p_at_20": 0.020000000000000018,
+          "p_at_50": 0.026532998322843206
+        }
+      },
+      {
+        "seed": 123,
+        "mean": {
+          "auprc": 0.9870850710557718,
+          "auroc": 0.9998514706347785,
+          "f1_best": 0.9715686274509803,
+          "p_at_10": 1.0,
+          "p_at_20": 0.99,
+          "p_at_50": 0.496,
+          "median_days": -16.9
+        },
+        "std": {
+          "auprc": 0.01632073354117213,
+          "auroc": 0.00025835332482632573,
+          "f1_best": 0.03567334391894168,
+          "p_at_10": 0.0,
+          "p_at_20": 0.020000000000000018,
+          "p_at_50": 0.04270831300812523
+        }
+      },
+      {
+        "seed": 456,
+        "mean": {
+          "auprc": 0.9866892287311959,
+          "auroc": 0.9998307132823075,
+          "f1_best": 0.9723604826546003,
+          "p_at_10": 1.0,
+          "p_at_20": 1.0,
+          "p_at_50": 0.496,
+          "median_days": -15.3
+        },
+        "std": {
+          "auprc": 0.018446033493155517,
+          "auroc": 0.0003072760031194914,
+          "f1_best": 0.02904487490586477,
+          "p_at_10": 0.0,
+          "p_at_20": 0.0,
+          "p_at_50": 0.014966629547095779
+        }
+      }
+    ],
+    "mean": {
+      "auprc": 0.9850531716802594,
+      "auroc": 0.9998493509474039,
+      "f1_best": 0.971324569006034,
+      "p_at_10": 1.0,
+      "p_at_20": 0.9933333333333333,
+      "p_at_50": 0.496,
+      "median_days": -15.933333333333332
+    },
+    "std": {
+      "auprc": 0.0025986664588115824,
+      "auroc": 1.4430283236181734e-05,
+      "f1_best": 0.0009610775501152283,
+      "p_at_10": 0.0,
+      "p_at_20": 0.004714045207910321,
+      "p_at_50": 0.0,
+      "median_days": 0.6944222218666545
+    },
+    "per_fold": [
+      {
+        "seed": 42,
+        "fold": 0,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.9994288086891174,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -16.0
+      },
+      {
+        "seed": 42,
+        "fold": 1,
+        "auprc": 1.0,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.24572622776031494,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -15.0
+      },
+      {
+        "seed": 42,
+        "fold": 2,
+        "auprc": 0.9856885445472401,
+        "auroc": 0.9999609588506285,
+        "f1_best": 0.9600000000000001,
+        "threshold_best": 0.042402975261211395,
+        "p_at_10": 1.0,
+        "p_at_20": 0.95,
+        "p_at_50": 0.48,
+        "median_days": -16.0
+      },
+      {
+        "seed": 42,
+        "fold": 3,
+        "auprc": 0.9907407407407407,
+        "auroc": 0.9999611454326457,
+        "f1_best": 0.9811320754716981,
+        "threshold_best": 0.9339064955711365,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.54,
+        "median_days": -17.0
+      },
+      {
+        "seed": 42,
+        "fold": 4,
+        "auprc": 0.9304967909810709,
+        "auroc": 0.9994072403423548,
+        "f1_best": 0.9090909090909091,
+        "threshold_best": 0.9970128536224365,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.46,
+        "median_days": -14.0
+      },
+      {
+        "seed": 123,
+        "fold": 0,
+        "auprc": 0.9999999999999998,
+        "auroc": 0.9999999999999999,
+        "f1_best": 1.0,
+        "threshold_best": 0.9835168719291687,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.46,
+        "median_days": -15.0
+      },
+      {
+        "seed": 123,
+        "fold": 1,
+        "auprc": 0.9740713840468398,
+        "auroc": 0.9999187411571259,
+        "f1_best": 0.9166666666666666,
+        "threshold_best": 0.15784180164337158,
+        "p_at_10": 1.0,
+        "p_at_20": 0.95,
+        "p_at_50": 0.48,
+        "median_days": -15.0
+      },
+      {
+        "seed": 123,
+        "fold": 2,
+        "auprc": 1.0,
+        "auroc": 0.9999999999999999,
+        "f1_best": 1.0,
+        "threshold_best": 0.9712134003639221,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.58,
+        "median_days": -21.0
+      },
+      {
+        "seed": 123,
+        "fold": 3,
+        "auprc": 0.9999999999999999,
+        "auroc": 0.9999999999999999,
+        "f1_best": 1.0,
+        "threshold_best": 0.9768508672714233,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -15.5
+      },
+      {
+        "seed": 123,
+        "fold": 4,
+        "auprc": 0.96135397123202,
+        "auroc": 0.9993386120167677,
+        "f1_best": 0.9411764705882353,
+        "threshold_best": 0.011230075731873512,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -18.0
+      },
+      {
+        "seed": 456,
+        "fold": 0,
+        "auprc": 0.9999999999999998,
+        "auroc": 1.0,
+        "f1_best": 1.0,
+        "threshold_best": 0.9996305704116821,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -14.5
+      },
+      {
+        "seed": 456,
+        "fold": 1,
+        "auprc": 0.951604651814488,
+        "auroc": 0.9992175237202764,
+        "f1_best": 0.923076923076923,
+        "threshold_best": 0.18254882097244263,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.48,
+        "median_days": -17.0
+      },
+      {
+        "seed": 456,
+        "fold": 2,
+        "auprc": 0.997252747252747,
+        "auroc": 0.9999911327865219,
+        "f1_best": 0.9803921568627451,
+        "threshold_best": 0.10064658522605896,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.52,
+        "median_days": -14.5
+      },
+      {
+        "seed": 456,
+        "fold": 3,
+        "auprc": 1.0,
+        "auroc": 0.9999999999999999,
+        "f1_best": 1.0,
+        "threshold_best": 0.9756861329078674,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -16.0
+      },
+      {
+        "seed": 456,
+        "fold": 4,
+        "auprc": 0.9845887445887447,
+        "auroc": 0.99994490990474,
+        "f1_best": 0.9583333333333334,
+        "threshold_best": 0.9313734769821167,
+        "p_at_10": 1.0,
+        "p_at_20": 1.0,
+        "p_at_50": 0.5,
+        "median_days": -14.5
+      }
+    ]
+  },
+  "per_scenario": {
+    "2": {
+      "auprc": 0.9821614361017758,
+      "auroc": 0.9998886182971098,
+      "f1_best": 0.9500000000000001,
+      "threshold_best": 0.8427324891090393,
+      "p_at_10": 1.0,
+      "p_at_20": 1.0,
+      "p_at_50": 1.0
+    }
+  },
+  "detection_latency": {
+    "median_days": -16.0,
+    "p90_days": -13.8,
+    "detected_count": 29,
+    "total_insiders": 70,
+    "per_insider": [
+      {
+        "user_id": "AAF0535",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-06-11 00:00:00"
+      },
+      {
+        "user_id": "AKR0057",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-09-21 00:00:00"
+      },
+      {
+        "user_id": "CCL0068",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "CEJ0109",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-24 00:00:00"
+      },
+      {
+        "user_id": "CQW0652",
+        "days_to_detect": -17.0,
+        "first_flagged_window": "2011-02-02 00:00:00"
+      },
+      {
+        "user_id": "DIB0285",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "DRR0162",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-10-29 00:00:00"
+      },
+      {
+        "user_id": "EDB0714",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-09-30 00:00:00"
+      },
+      {
+        "user_id": "EGD0132",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "FSC0601",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-04 00:00:00"
+      },
+      {
+        "user_id": "HBO0413",
+        "days_to_detect": -13.0,
+        "first_flagged_window": "2011-02-02 00:00:00"
+      },
+      {
+        "user_id": "HXL0968",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-08-11 00:00:00"
+      },
+      {
+        "user_id": "IJM0776",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-22 00:00:00"
+      },
+      {
+        "user_id": "IKR0401",
+        "days_to_detect": -18.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "IUB0565",
+        "days_to_detect": -16.0,
+        "first_flagged_window": "2010-09-21 00:00:00"
+      },
+      {
+        "user_id": "JJM0203",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-08-20 00:00:00"
+      },
+      {
+        "user_id": "KRL0501",
+        "days_to_detect": -14.0,
+        "first_flagged_window": "2010-11-09 00:00:00"
+      },
+      {
+        "user_id": "LCC0819",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-02 00:00:00"
+      },
+      {
+        "user_id": "MDH0580",
+        "days_to_detect": -26.0,
+        "first_flagged_window": "2010-12-10 00:00:00"
+      },
+      {
+        "user_id": "NWT0098",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2011-01-24 00:00:00"
+      },
+      {
+        "user_id": "PNL0301",
+        "days_to_detect": -4.0,
+        "first_flagged_window": "2010-06-11 00:00:00"
+      },
+      {
+        "user_id": "PSF0133",
+        "days_to_detect": -21.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      },
+      {
+        "user_id": "RAR0725",
+        "days_to_detect": -15.0,
+        "first_flagged_window": "2010-06-22 00:00:00"
+      },
+      {
+        "user_id": "RHL0992",
+        "days_to_detect": -13.0,
+        "first_flagged_window": "2010-07-01 00:00:00"
+      },
+      {
+        "user_id": "RMW0542",
+        "days_to_detect": -20.0,
+        "first_flagged_window": "2010-06-02 00:00:00"
+      },
+      {
+        "user_id": "TNM0961",
+        "days_to_detect": -16.0,
+        "first_flagged_window": "2010-09-30 00:00:00"
+      },
+      {
+        "user_id": "VSS0154",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-08-20 00:00:00"
+      },
+      {
+        "user_id": "XHW0498",
+        "days_to_detect": -19.0,
+        "first_flagged_window": "2010-07-22 00:00:00"
+      },
+      {
+        "user_id": "CCA0046",
+        "days_to_detect": -94.0,
+        "first_flagged_window": "2010-07-13 00:00:00"
+      }
+    ]
+  },
+  "oof_threshold": 0.8427324891090393,
+  "feature_importance_top20": [
+    {
+      "feature": "http_request_count_mean_deviation",
+      "importance": 0.476303368806839
+    },
+    {
+      "feature": "http_request_count_std_deviation",
+      "importance": 0.15233184397220612
+    },
+    {
+      "feature": "unique_filenames_mean_deviation",
+      "importance": 0.11746148765087128
+    },
+    {
+      "feature": "file_count_mean_deviation",
+      "importance": 0.045751702040433884
+    },
+    {
+      "feature": "after_hours_logons_std_deviation",
+      "importance": 0.03557443618774414
+    },
+    {
+      "feature": "after_hours_logons_max_burst",
+      "importance": 0.02370166964828968
+    },
+    {
+      "feature": "weekend_logons_std_deviation",
+      "importance": 0.016875524073839188
+    },
+    {
+      "feature": "usb_connect_count_std_deviation",
+      "importance": 0.013817149214446545
+    },
+    {
+      "feature": "file_to_removable_count_mean_deviation",
+      "importance": 0.013357404619455338
+    },
+    {
+      "feature": "http_request_count_max_deviation",
+      "importance": 0.01052435114979744
+    },
+    {
+      "feature": "http_request_count_days_above_3sigma",
+      "importance": 0.00931792426854372
+    },
+    {
+      "feature": "after_hours_logons_mean_deviation",
+      "importance": 0.006972051225602627
+    },
+    {
+      "feature": "weekend_logons_max_deviation",
+      "importance": 0.00627619493752718
+    },
+    {
+      "feature": "mean_total_deviation",
+      "importance": 0.0057603116147220135
+    },
+    {
+      "feature": "after_hours_logons_days_above_2sigma",
+      "importance": 0.0057584550231695175
+    },
+    {
+      "feature": "after_hours_logons_slope",
+      "importance": 0.005690079648047686
+    },
+    {
+      "feature": "job_search_visits_max_burst",
+      "importance": 0.0055127800442278385
+    },
+    {
+      "feature": "usb_connect_count_days_above_2sigma",
+      "importance": 0.004987800493836403
+    },
+    {
+      "feature": "logoff_count_max_deviation",
+      "importance": 0.004746869672089815
+    },
+    {
+      "feature": "email_to_external_count_days_above_2sigma",
+      "importance": 0.0039012639317661524
+    }
+  ]
+}

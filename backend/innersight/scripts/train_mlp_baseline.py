@@ -32,6 +32,7 @@ from innersight.data.feature_store import FeatureStore
 from innersight.models.dataset import DeviationWindowDataset
 from innersight.models.losses import FocalLoss
 from innersight.scripts import compute_baselines
+from innersight.scripts.train_temporal import _resolve_device
 from innersight.training.evaluation import (
     compute_metrics,
     detection_latency,
@@ -56,7 +57,7 @@ MAX_EPOCHS = 100
 PATIENCE = 10
 BATCH_SIZE = 64
 
-_DEVICE = torch.device("cpu")  # CPU keeps cross-validation reproducible
+_DEVICE = torch.device("cpu")  # default; overridden by --device in main()
 
 
 class _BaselineMLP(nn.Module):
@@ -90,6 +91,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--n-folds', type=int, default=5, help='CV folds per seed (default: 5)')
     p.add_argument('--seeds', default='42,123,456',
                    help='Comma-separated CV seeds (default: "42,123,456")')
+    p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
+                   help="Compute device: 'auto' = cuda>mps>cpu (default).")
     return p.parse_args(argv)
 
 
@@ -213,6 +216,9 @@ def _load_deviations(store: FeatureStore, version: str, store_dir: str, data_dir
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     setup_logging()
+    global _DEVICE
+    _DEVICE = _resolve_device(args.device)
+    logger.info("train_mlp_baseline | device=%s", _DEVICE)
     seeds = [int(s) for s in args.seeds.split(',') if s.strip()]
     seed_everything(seeds[0] if seeds else 42)
 

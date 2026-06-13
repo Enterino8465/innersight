@@ -18,6 +18,7 @@ STORE_DIR="feature_store"
 OUTPUT_DIR="training_results"
 QUICK=0
 FORCE=0
+DEVICE="auto"  # auto = cuda>mps>cpu for the torch steps (mlp/temporal/graph/fusion)
 TIMEOUT=2700   # default 45 minutes per step (override with --timeout; heavy graph/
                # fusion steps may legitimately need much longer)
 
@@ -38,6 +39,8 @@ Options:
   --force             Re-run every step even if its results JSON already exists.
   --timeout SECONDS   Per-step time limit (default: 2700 = 45m; 0 = no limit).
                       The graph/fusion steps often need more — raise it for full runs.
+  --device DEV        Torch device for mlp/temporal/graph/fusion: auto|cpu|cuda|mps
+                      (default: auto = cuda>mps>cpu). Graph building stays on CPU.
   -h, --help          Show this help and exit.
 
 Examples:
@@ -59,6 +62,7 @@ while [ $# -gt 0 ]; do
         --quick)      QUICK=1; shift ;;
         --force)      FORCE=1; shift ;;
         --timeout)    TIMEOUT="$2"; shift 2 ;;
+        --device)     DEVICE="$2"; shift 2 ;;
         -h|--help)    usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
     esac
@@ -148,7 +152,7 @@ run_step() {
 # ── Header ────────────────────────────────────────────────────────────────────
 log "================ run_all_training ================"
 log "version=$VERSION  data-dir=$DATA_DIR  store-dir=$STORE_DIR  output-dir=$OUTPUT_DIR"
-log "quick=$QUICK  force=$FORCE  python=$PYTHON"
+log "quick=$QUICK  force=$FORCE  device=$DEVICE  python=$PYTHON"
 log "per-step timeout=${TIMEOUT}s ($((TIMEOUT / 60))m; 0 = unlimited)"
 if [ -z "$TIMEOUT_BIN" ] && [ "$TIMEOUT" != "0" ]; then
     log "WARN  no 'timeout'/'gtimeout' binary found — the per-step limit CANNOT be"
@@ -190,21 +194,21 @@ run_step "02_xgboost" "$OUTPUT_DIR/xgboost_results.json" "${cmd[@]}"
 # ── Step 3: MLP baseline ─────────────────────────────────────────────────────
 cmd=("$PYTHON" -m innersight.scripts.train_mlp_baseline \
      --version "$VERSION" --data-dir "$DATA_DIR" --store-dir "$STORE_DIR" \
-     --output "$OUTPUT_DIR/mlp_results.json")
+     --output "$OUTPUT_DIR/mlp_results.json" --device "$DEVICE")
 [ "$QUICK" -eq 1 ] && cmd=("${cmd[@]}" --n-folds 2 --seeds 42)
 run_step "03_mlp" "$OUTPUT_DIR/mlp_results.json" "${cmd[@]}"
 
 # ── Step 4: Temporal CNN ─────────────────────────────────────────────────────
 cmd=("$PYTHON" -m innersight.scripts.train_temporal \
      --version "$VERSION" --data-dir "$DATA_DIR" --store-dir "$STORE_DIR" \
-     --output "$OUTPUT_DIR/temporal_results.json" --checkpoint-dir "$CKPT_DIR")
+     --output "$OUTPUT_DIR/temporal_results.json" --checkpoint-dir "$CKPT_DIR" --device "$DEVICE")
 [ "$QUICK" -eq 1 ] && cmd=("${cmd[@]}" --config "$QUICK_CFG")
 run_step "04_temporal" "$OUTPUT_DIR/temporal_results.json" "${cmd[@]}"
 
 # ── Step 5: Temporal + Graph ─────────────────────────────────────────────────
 cmd=("$PYTHON" -m innersight.scripts.train_temporal_graph \
      --version "$VERSION" --data-dir "$DATA_DIR" --store-dir "$STORE_DIR" \
-     --output "$OUTPUT_DIR/temporal_graph_results.json" --checkpoint-dir "$CKPT_DIR")
+     --output "$OUTPUT_DIR/temporal_graph_results.json" --checkpoint-dir "$CKPT_DIR" --device "$DEVICE")
 [ "$QUICK" -eq 1 ] && cmd=("${cmd[@]}" --config "$QUICK_CFG")
 run_step "05_temporal_graph" "$OUTPUT_DIR/temporal_graph_results.json" "${cmd[@]}"
 
@@ -212,7 +216,7 @@ run_step "05_temporal_graph" "$OUTPUT_DIR/temporal_graph_results.json" "${cmd[@]
 cmd=("$PYTHON" -m innersight.scripts.train_fusion \
      --version "$VERSION" --data-dir "$DATA_DIR" --store-dir "$STORE_DIR" \
      --output "$OUTPUT_DIR/fusion_results.json" --checkpoint-dir "$CKPT_DIR" \
-     --baseline-results-dir "$OUTPUT_DIR")
+     --baseline-results-dir "$OUTPUT_DIR" --device "$DEVICE")
 [ "$QUICK" -eq 1 ] && cmd=("${cmd[@]}" --config "$QUICK_CFG")
 run_step "06_fusion" "$OUTPUT_DIR/fusion_results.json" "${cmd[@]}"
 
