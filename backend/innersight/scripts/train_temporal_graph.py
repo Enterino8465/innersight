@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 import yaml
 
-from innersight.config import setup_logging
+from innersight.config import setup_logging, BUSINESS_HOURS_START, BUSINESS_HOURS_END
 from innersight.data.answers import load_insiders
 from innersight.data.feature_store import FeatureStore
 from innersight.data.pipeline import load_version
@@ -163,6 +163,7 @@ def _presort_logs(logs: dict) -> dict:
     for the graph-building phase.
     """
     import pandas as _pd
+    from innersight.models.graph_builder import _extract_domain
     out = {}
     for name, df in logs.items():
         if df is not None and 'date' in df.columns:
@@ -171,39 +172,82 @@ def _presort_logs(logs: dict) -> dict:
                 df['date'] = _pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
             df._date_sorted = True  # signal to _win_prepare that sort is done
+
+            # Precompute datetime flags to avoid dt accessors in the loop
+            h = df['date'].dt.hour
+            df['_hour'] = h.astype(float)
+            df['_after'] = ((h < BUSINESS_HOURS_START) | (h >= BUSINESS_HOURS_END)).astype(float)
+            df['_weekend'] = (df['date'].dt.dayofweek >= 5).astype(float)
+            df['_day'] = df['date'].dt.normalize()
+
+            # Precompute domain for http
+            if name == 'http' and 'url' in df.columns:
+                df['_domain'] = df['url'].apply(_extract_domain)
+
+            # Precompute removable flag for file
+            if name == 'file':
+                if 'to_removable_media' in df.columns:
+                    rem = df['to_removable_media']
+                    if rem.dtype == object:
+                        rem = rem.astype(str).str.lower().isin(('true', '1'))
+                    else:
+                        rem = rem.astype(bool)
+                    df['_torem'] = rem.astype(float)
+                else:
+                    df['_torem'] = 1.0
+
             out[name] = df
         else:
             out[name] = df
-    logger.info('train_temporal_graph | logs pre-sorted by date for fast window slicing.')
+    logger.info('train_temporal_graph | logs pre-sorted and flags precomputed.')
     return out
 
 
 def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
                          max_url_nodes: int | None = None,
                          max_file_nodes: int | None = None) -> dict:
-    """Build one windowed HeteroData per unique period (optionally excluding users).
+    """Build one windowed HeteroData per unique period (optionally excluding users) in parallel.
 
     ``max_url_nodes`` / ``max_file_nodes`` cap the URL/file node count per window
     to bound peak memory (see :func:`build_windowed_graph`).
     """
     used_logs = _filter_logs(logs, exclude_users) if exclude_users else logs
-    # Pre-sort once by date so every _win_slice call uses O(log n) searchsorted
-    # instead of O(n) boolean-mask scans across the full log (28M+ HTTP rows).
+    # Pre-sort once by date and precompute flags
     used_logs = _presort_logs(used_logs)
-    graphs = {}
-    unique_periods = set(periods)
+
+    unique_periods = sorted(list(set(periods)))
     logger.info('train_temporal_graph | building %d period graphs%s …',
                 len(unique_periods),
                 f' (excluding {len(exclude_users)} val users)' if exclude_users else '')
-    for i, period in enumerate(unique_periods):
-        ws, we = period
-        graphs[period] = build_windowed_graph(
-            used_logs, ws, we,
-            max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-        )
-        if (i + 1) % 100 == 0:
-            logger.info('train_temporal_graph | built %d/%d period graphs.',
-                        i + 1, len(unique_periods))
+
+    from concurrent.futures import ProcessPoolExecutor
+    import os
+
+    # Use parallel processing since the server has many CPU cores.
+    # Cap at 32 workers to be friendly to other system processes.
+    num_workers = min(32, os.cpu_count() or 1)
+    logger.info('train_temporal_graph | using %d parallel workers for graph building.', num_workers)
+
+    graphs = {}
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(
+                build_windowed_graph,
+                used_logs, ws, we,
+                max_url_nodes=max_url_nodes,
+                max_file_nodes=max_file_nodes
+            ): (ws, we)
+            for (ws, we) in unique_periods
+        }
+
+        count = 0
+        for future in futures:
+            period = futures[future]
+            graphs[period] = future.result()
+            count += 1
+            if count % 100 == 0:
+                logger.info('train_temporal_graph | built %d/%d period graphs.',
+                            count, len(unique_periods))
     return graphs
 
 

@@ -1734,6 +1734,8 @@ def _win_slice(df, start, end):
 
 def _win_flags(df):
     """Add per-row _hour / _after / _weekend / _day helper columns."""
+    if '_hour' in df.columns and '_after' in df.columns and '_weekend' in df.columns and '_day' in df.columns:
+        return df.copy()  # return copy so callers can modify it freely
     df = df.copy()
     h = df['date'].dt.hour
     df['_hour'] = h.astype(float)
@@ -1768,6 +1770,8 @@ def _win_to_removable(df):
     r5+ logs carry a ``to_removable_media`` flag; r3-4 file logs record only
     removable-media copies, so every row counts as removable there.
     """
+    if '_torem' in df.columns:
+        return df['_torem'].astype(bool)
     if 'to_removable_media' in df.columns:
         return df['to_removable_media'].astype(str).str.lower().isin(('true', '1'))
     return pd.Series(True, index=df.index)
@@ -2098,11 +2102,13 @@ def build_windowed_graph(logs, window_start, window_end, prior_days=60,
 
     # Resolve URLs to domains once (used for both nodes and edges).
     if http_w is not None:
-        http_w = http_w.copy()
-        http_w['_domain'] = http_w['url'].apply(_extract_domain)
+        if '_domain' not in http_w.columns:
+            http_w = http_w.copy()
+            http_w['_domain'] = http_w['url'].apply(_extract_domain)
     if http_p is not None:
-        http_p = http_p.copy()
-        http_p['_domain'] = http_p['url'].apply(_extract_domain)
+        if '_domain' not in http_p.columns:
+            http_p = http_p.copy()
+            http_p['_domain'] = http_p['url'].apply(_extract_domain)
 
     # ── Node sets ──
     users: set[str] = set()
