@@ -154,6 +154,30 @@ def _filter_logs(logs: dict, exclude_users: set[str]) -> dict:
     return out
 
 
+def _presort_logs(logs: dict) -> dict:
+    """Sort every log DataFrame by date once so _win_slice can use searchsorted.
+
+    This is a one-time O(n log n) sort per log type that replaces 32 000+
+    O(n) boolean-mask scans (one per period × slice call inside
+    build_windowed_graph). On a 28 M-row HTTP log the speedup is ~100-1000×
+    for the graph-building phase.
+    """
+    import pandas as _pd
+    out = {}
+    for name, df in logs.items():
+        if df is not None and 'date' in df.columns:
+            df = df.copy()
+            if not _pd.api.types.is_datetime64_any_dtype(df['date']):
+                df['date'] = _pd.to_datetime(df['date'])
+            df = df.sort_values('date').reset_index(drop=True)
+            df._date_sorted = True  # signal to _win_prepare that sort is done
+            out[name] = df
+        else:
+            out[name] = df
+    logger.info('train_temporal_graph | logs pre-sorted by date for fast window slicing.')
+    return out
+
+
 def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
                          max_url_nodes: int | None = None,
                          max_file_nodes: int | None = None) -> dict:
@@ -163,13 +187,23 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
     to bound peak memory (see :func:`build_windowed_graph`).
     """
     used_logs = _filter_logs(logs, exclude_users) if exclude_users else logs
+    # Pre-sort once by date so every _win_slice call uses O(log n) searchsorted
+    # instead of O(n) boolean-mask scans across the full log (28M+ HTTP rows).
+    used_logs = _presort_logs(used_logs)
     graphs = {}
-    for period in set(periods):
+    unique_periods = set(periods)
+    logger.info('train_temporal_graph | building %d period graphs%s …',
+                len(unique_periods),
+                f' (excluding {len(exclude_users)} val users)' if exclude_users else '')
+    for i, period in enumerate(unique_periods):
         ws, we = period
         graphs[period] = build_windowed_graph(
             used_logs, ws, we,
             max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
         )
+        if (i + 1) % 100 == 0:
+            logger.info('train_temporal_graph | built %d/%d period graphs.',
+                        i + 1, len(unique_periods))
     return graphs
 
 

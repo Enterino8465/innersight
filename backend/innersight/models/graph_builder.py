@@ -1699,17 +1699,36 @@ def load_temporal_graphs() -> dict:
 # training time.
 
 def _win_prepare(df):
-    """Datetime-normalise a log DataFrame, or None if it is unusable."""
+    """Datetime-normalise and sort a log DataFrame for fast binary-search slicing.
+
+    Sorting by date is a one-time cost per log type per graph build call that
+    enables O(log n) window slicing via ``searchsorted`` instead of O(n)
+    boolean-mask scans across the full DataFrame on every period slice.
+    """
     if df is None or len(df) == 0 or 'date' not in df.columns:
         return None
-    return _ensure_datetime(df)
+    df = _ensure_datetime(df)
+    # Sort by date so _win_slice can use binary search.
+    # If the caller pre-sorted (via _presort_logs), this is a no-op in practice.
+    if not getattr(df, '_date_sorted', False):
+        df = df.sort_values('date').reset_index(drop=True)
+    return df
 
 
 def _win_slice(df, start, end):
-    """Rows with start <= date <= end (inclusive), or None if empty."""
+    """Rows with start <= date <= end (inclusive), or None if empty.
+
+    Uses binary search (``searchsorted``) for O(log n) slicing, which requires
+    the DataFrame to be sorted by ``date`` — guaranteed by ``_win_prepare``.
+    This replaces a full O(n) boolean-mask scan that dominated runtime on large
+    logs (e.g. 28 M HTTP rows × 3200 periods × 10 slices = 32 000 full scans).
+    """
     if df is None:
         return None
-    sub = df[(df['date'] >= start) & (df['date'] <= end)]
+    dates = df['date']
+    lo = int(dates.searchsorted(pd.Timestamp(start), side='left'))
+    hi = int(dates.searchsorted(pd.Timestamp(end), side='right'))
+    sub = df.iloc[lo:hi]
     return sub if len(sub) else None
 
 
