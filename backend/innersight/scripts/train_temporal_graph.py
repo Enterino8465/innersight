@@ -220,17 +220,18 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
                 len(unique_periods),
                 f' (excluding {len(exclude_users)} val users)' if exclude_users else '')
 
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import ProcessPoolExecutor, as_completed
     import os
 
-    # Use parallel processing since the server has many CPU cores.
-    # Cap at 32 workers to be friendly to other system processes.
-    num_workers = min(32, os.cpu_count() or 1)
+    # Each worker receives its own copy of the raw logs in memory.
+    # The HTTP log alone is ~15 GB, so 32 workers would need ~480 GB → OOM.
+    # 4 workers stay well within the 128 GB RAM limit (~60 GB peak).
+    num_workers = min(4, os.cpu_count() or 1)
     logger.info('train_temporal_graph | using %d parallel workers for graph building.', num_workers)
 
     graphs = {}
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = {
+        future_to_period = {
             executor.submit(
                 build_windowed_graph,
                 used_logs, ws, we,
@@ -241,8 +242,8 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
         }
 
         count = 0
-        for future in futures:
-            period = futures[future]
+        for future in as_completed(future_to_period):
+            period = future_to_period[future]
             graphs[period] = future.result()
             count += 1
             if count % 100 == 0:
