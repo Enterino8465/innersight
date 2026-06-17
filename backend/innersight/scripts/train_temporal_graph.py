@@ -142,31 +142,46 @@ def _build_window_registry(dataset):
 
 
 def _filter_logs(logs: dict, exclude_users: set[str]) -> dict:
-    """Drop rows authored by excluded users (inductive removal from train graph)."""
+    """Drop rows authored by excluded users (inductive removal from train graph).
+
+    Propagates ``df.attrs`` (including ``_date_sorted``) to the filtered
+    DataFrames so that :func:`_presort_logs` can skip re-sorting them.
+    """
     if not exclude_users:
         return logs
     out = {}
     for name, df in logs.items():
         if df is not None and 'user' in df.columns:
-            out[name] = df[~df['user'].astype(str).isin(exclude_users)]
+            filtered = df[~df['user'].astype(str).isin(exclude_users)]
+            filtered.attrs.update(df.attrs)   # preserve _date_sorted and any other flags
+            out[name] = filtered
         else:
             out[name] = df
     return out
 
 
 def _presort_logs(logs: dict) -> dict:
-    """Sort every log DataFrame by date once so _win_slice can use searchsorted.
+    """Sort every log DataFrame by date once so _filter_window can use searchsorted.
 
-    This is a one-time O(n log n) sort per log type that replaces 32 000+
+    This is a one-time O(n log n) sort per log type that replaces thousands of
     O(n) boolean-mask scans (one per period × slice call inside
     build_windowed_graph). On a 28 M-row HTTP log the speedup is ~100-1000×
     for the graph-building phase.
+
+    If a DataFrame already carries ``df.attrs['_date_sorted'] = True`` (set by
+    a previous call), the sort and column pre-computation are skipped entirely
+    — this matters when the same pre-sorted logs are passed on warm-cache runs.
     """
     import pandas as _pd
     from innersight.models.graph_builder import _extract_domain
     out = {}
+    any_sorted = False
     for name, df in logs.items():
         if df is not None and 'date' in df.columns:
+            if df.attrs.get('_date_sorted'):
+                # Already sorted and precomputed — skip all work.
+                out[name] = df
+                continue
             df = df.copy()
             if not _pd.api.types.is_datetime64_any_dtype(df['date']):
                 df['date'] = _pd.to_datetime(df['date'])
@@ -197,9 +212,13 @@ def _presort_logs(logs: dict) -> dict:
                     df['_torem'] = 1.0
 
             out[name] = df
+            any_sorted = True
         else:
             out[name] = df
-    logger.info('train_temporal_graph | logs pre-sorted and flags precomputed.')
+    if any_sorted:
+        logger.info('train_temporal_graph | logs pre-sorted and flags precomputed.')
+    else:
+        logger.info('train_temporal_graph | logs already sorted — skipping pre-sort.')
     return out
 
 
@@ -526,6 +545,10 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_temporal_graph | loading raw logs for graph construction …")
     dataset_obj = load_version(args.data_dir, args.version)
     logs = dataset_obj.logs
+    # Pre-sort once here so every _build_period_graphs call (full_graphs, each CV
+    # fold, OOF, final) receives already-sorted DataFrames and skips re-sorting.
+    logger.info("train_temporal_graph | pre-sorting logs …")
+    logs = _presort_logs(logs)
 
     win_dataset = DeviationWindowDataset(deviations, attack_windows)
     windows_t, user_ids, period_keys, y, metas = _build_window_registry(win_dataset)
