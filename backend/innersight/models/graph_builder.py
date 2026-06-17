@@ -1298,7 +1298,10 @@ def build_http_edges(
         return _empty
 
     df = df.copy()
-    df['_domain'] = df['url'].apply(_extract_domain)
+    # Use pre-computed _domain column from _presort_logs (avoids expensive
+    # .apply(_extract_domain) on potentially 1 M+ rows per window).
+    if '_domain' not in df.columns:
+        df['_domain'] = df['url'].apply(_extract_domain)
 
     user_map = pd.Series(user_to_idx)
     url_map  = pd.Series(url_to_idx)
@@ -1312,17 +1315,48 @@ def build_http_edges(
     if n_skipped:
         logger.warning('build_http_edges | %d rows skipped', n_skipped)
 
-    logger.info(
-        'build_http_edges | window %s – %s | %d edges  (%d skipped)',
-        start_date, end_date, len(df), n_skipped,
-    )
-
     if df.empty:
         return {**_empty, 'n_skipped': n_skipped}
 
-    src  = torch.tensor(df['_src'].astype(int).values, dtype=torch.long)
-    dst  = torch.tensor(df['_dst'].astype(int).values, dtype=torch.long)
-    feat = torch.tensor(_temporal3(df), dtype=torch.float32)
+    # ── Aggregate to one edge per unique (user, domain) pair ──────────────────
+    # A raw 28-day HTTP window has ~1.4 M rows → ~1 M edges after node-cap
+    # filtering. Holding 3 200 such graphs in RAM would require ~200 GB.
+    # Aggregating to unique (user, domain) pairs reduces this to ~50 K edges
+    # per graph (~4 MB) while preserving all meaningful behavioural signals:
+    # mean hour of access, fraction of visits on weekends, fraction after-hours.
+    df['_src'] = df['_src'].astype(int)
+    df['_dst'] = df['_dst'].astype(int)
+
+    # Use precomputed flag columns when available (set by _presort_logs).
+    if '_hour' not in df.columns:
+        h = df['date'].dt.hour
+        df['_hour'] = h.astype(float)
+    if '_weekend' not in df.columns:
+        df['_weekend'] = (df['date'].dt.dayofweek >= 5).astype(float)
+    if '_after' not in df.columns:
+        h = df['date'].dt.hour
+        df['_after'] = ((h < BUSINESS_HOURS_START) | (h >= BUSINESS_HOURS_END)).astype(float)
+
+    agg = (
+        df.groupby(['_src', '_dst'], sort=False)[['_hour', '_weekend', '_after']]
+        .mean()
+        .reset_index()
+    )
+    agg['_hour'] = agg['_hour'] / 24.0  # normalise to [0, 1]
+
+    n_edges = len(agg)
+    logger.info(
+        'build_http_edges | window %s – %s | %d unique (user,domain) edges '
+        'aggregated from %d requests (%d skipped)',
+        start_date, end_date, n_edges, n_before - n_skipped, n_skipped,
+    )
+
+    src  = torch.tensor(agg['_src'].values,  dtype=torch.long)
+    dst  = torch.tensor(agg['_dst'].values,  dtype=torch.long)
+    feat = torch.tensor(
+        agg[['_hour', '_weekend', '_after']].values.astype(np.float32),
+        dtype=torch.float32,
+    )
 
     return {
         'edge_index':     torch.stack([src, dst]),

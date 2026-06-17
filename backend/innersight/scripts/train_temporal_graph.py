@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import gzip
 import json
 import logging
 import sys
@@ -241,7 +242,7 @@ def _graph_cache_file(subdir, ws, we, max_url_nodes, max_file_nodes) -> 'Path':
     """Return the cache file path for a single period graph."""
     ws_s = str(ws).replace(' ', 'T').replace(':', '').replace('-', '')[:15]
     we_s = str(we).replace(' ', 'T').replace(':', '').replace('-', '')[:15]
-    return subdir / f'{ws_s}_{we_s}_u{max_url_nodes or 0}_f{max_file_nodes or 0}.pkl'
+    return subdir / f'{ws_s}_{we_s}_u{max_url_nodes or 0}_f{max_file_nodes or 0}.pkl.gz'
 
 
 def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
@@ -274,7 +275,7 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
         if cache_subdir is not None:
             cfile = _graph_cache_file(cache_subdir, ws, we, max_url_nodes, max_file_nodes)
             if cfile.exists():
-                with open(cfile, 'rb') as fh:
+                with gzip.open(str(cfile), 'rb') as fh:
                     graphs[(ws, we)] = pickle.load(fh)
                 n_cached += 1
                 if count % 100 == 0:
@@ -290,7 +291,7 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
         )
         if cache_subdir is not None:
             cfile = _graph_cache_file(cache_subdir, ws, we, max_url_nodes, max_file_nodes)
-            with open(cfile, 'wb') as fh:
+            with gzip.open(str(cfile), 'wb', compresslevel=1) as fh:
                 pickle.dump(graph, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
         graphs[(ws, we)] = graph
