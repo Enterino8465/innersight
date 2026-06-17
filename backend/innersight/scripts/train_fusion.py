@@ -168,14 +168,19 @@ def _build_model(metadata, num_roles, num_depts, temporal_cfg, graph_cfg, head_d
 
 
 def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
-              temporal_cfg, graph_cfg, head_dropout, train_cfg, metadata, num_roles, num_depts):
+              temporal_cfg, graph_cfg, head_dropout, train_cfg, metadata, num_roles, num_depts,
+              max_url_nodes=None, max_file_nodes=None, cache_dir=None):
     """Train the fusion model on one fold; return val probabilities (val_pos order)."""
     seed_everything(seed)
     windows_t, user_ids, period_keys, y = (
         registry["windows"], registry["user_ids"], registry["periods"], registry["y"])
 
     val_users = set(user_ids[val_pos].tolist())
-    train_graphs = _build_period_graphs(logs, period_keys, exclude_users=val_users)
+    train_graphs = _build_period_graphs(
+        logs, period_keys, exclude_users=val_users,
+        max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+        cache_dir=cache_dir,
+    )
 
     model = _build_model(metadata, num_roles, num_depts, temporal_cfg, graph_cfg, head_dropout)
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["lr"],
@@ -282,6 +287,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
                    help="Compute device for the model: 'auto' = cuda>mps>cpu (default). "
                         "Graph construction stays on CPU regardless.")
+    p.add_argument('--max-url-nodes', type=int, default=2000, metavar='K',
+                   help="Cap URL nodes to the K most frequent domains per window "
+                        "(0 = no cap). Default: 2000.")
+    p.add_argument('--max-file-nodes', type=int, default=2000, metavar='K',
+                   help="Cap file nodes to the K most-copied filenames per window "
+                        "(0 = no cap). Default: 2000.")
+    p.add_argument('--graph-cache-dir', default=None, metavar='PATH',
+                   help='Directory to cache built period graphs to disk.')
     return p.parse_args(argv)
 
 
@@ -330,7 +343,11 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_fusion | %d windows, %d positive | %d roles, %d depts, OCEAN for %d users.",
                 len(y), n_pos, num_roles, num_depts, len(ocean_map))
 
-    full_graphs = _build_period_graphs(logs, period_keys, exclude_users=None)
+    full_graphs = _build_period_graphs(
+        logs, period_keys, exclude_users=None,
+        max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+        cache_dir=graph_cache_dir,
+    )
     metadata = next(iter(full_graphs.values())).metadata()
     registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys, "y": y,
                 "ocean": ocean, "roles": roles, "depts": depts}
@@ -340,7 +357,9 @@ def main(argv: list[str] | None = None) -> int:
                                       full_graphs=full_graphs, temporal_cfg=temporal_cfg,
                                       graph_cfg=graph_cfg, head_dropout=head_dropout,
                                       train_cfg=train_cfg, metadata=metadata,
-                                      num_roles=num_roles, num_depts=num_depts)
+                                      num_roles=num_roles, num_depts=num_depts,
+                                      max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+                                      cache_dir=graph_cache_dir)
         return val_probs
 
     positions = np.arange(len(y)).reshape(-1, 1)
@@ -364,10 +383,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # Final model trained on all data → checkpoint.
     all_pos = np.arange(len(y))
-    _, final = _fit_fold(all_pos, all_pos, seeds[0], registry=registry, logs=logs,
+    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry, logs=logs,
                          full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
                          head_dropout=head_dropout, train_cfg=train_cfg, metadata=metadata,
-                         num_roles=num_roles, num_depts=num_depts)
+                         num_roles=num_roles, num_depts=num_depts,
+                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+                         cache_dir=graph_cache_dir)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"fusion_{args.version}.pt"
