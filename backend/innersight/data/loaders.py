@@ -69,6 +69,16 @@ def load_csv(
     }
     if has_header:
         read_kwargs['header'] = 0
+        # Drop heavy and unused columns ('id' and 'content') for large files
+        if path.name in ('http.csv', 'email.csv'):
+            try:
+                with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+                    first_line = fh.readline().strip()
+                hdr = [c.strip().strip('"') for c in first_line.split(',')]
+                use_cols = [c for c in hdr if c.lower() not in ('id', 'content')]
+                read_kwargs['usecols'] = use_cols
+            except Exception:
+                pass
     else:
         read_kwargs['header'] = None
         read_kwargs['names'] = columns
@@ -111,6 +121,15 @@ def load_csv_chunked(
     read_kwargs: dict = {'chunksize': chunk_size, 'low_memory': False}
     if has_header:
         read_kwargs['header'] = 0
+        if path.name in ('http.csv', 'email.csv'):
+            try:
+                with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+                    first_line = fh.readline().strip()
+                hdr = [c.strip().strip('"') for c in first_line.split(',')]
+                use_cols = [c for c in hdr if c.lower() not in ('id', 'content')]
+                read_kwargs['usecols'] = use_cols
+            except Exception:
+                pass
     else:
         if columns is None:
             raise ValueError(f"columns required when has_header=False (file: {path})")
