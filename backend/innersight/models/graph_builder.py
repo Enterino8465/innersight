@@ -1766,8 +1766,9 @@ def _win_prepare(df):
     df = _ensure_datetime(df)
     # Sort by date so _win_slice can use binary search.
     # If the caller pre-sorted (via _presort_logs), this is a no-op in practice.
-    if not getattr(df, '_date_sorted', False):
+    if not (getattr(df, '_date_sorted', False) or df.attrs.get('_date_sorted', False)):
         df = df.sort_values('date').reset_index(drop=True)
+        df.attrs['_date_sorted'] = True
     return df
 
 
@@ -1849,17 +1850,23 @@ def _win_pairs_to_edges(agg, cols, src_map, dst_map):
         return _win_empty_edge(len(cols))
     src_keys = agg.index.get_level_values(0)
     dst_keys = agg.index.get_level_values(1)
-    mask = np.fromiter(
-        ((s in src_map and d in dst_map) for s, d in zip(src_keys, dst_keys)),
-        dtype=bool, count=len(agg),
-    )
-    if not mask.any():
+    
+    # Vectorised mapping via pandas Series
+    src_mapped = pd.Series(src_keys).map(src_map)
+    dst_mapped = pd.Series(dst_keys).map(dst_map)
+    valid = src_mapped.notna() & dst_mapped.notna()
+    
+    if not valid.any():
         return _win_empty_edge(len(cols))
-    if not mask.all():
-        agg = agg[mask]
-    src = [src_map[k] for k in agg.index.get_level_values(0)]
-    dst = [dst_map[k] for k in agg.index.get_level_values(1)]
-    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    
+    if not valid.all():
+        src_mapped = src_mapped[valid]
+        dst_mapped = dst_mapped[valid]
+        agg = agg.iloc[valid.values]
+        
+    src = src_mapped.astype(np.int64).to_numpy()
+    dst = dst_mapped.astype(np.int64).to_numpy()
+    edge_index = torch.tensor(np.stack([src, dst]), dtype=torch.long)
     edge_attr = torch.tensor(agg[cols].to_numpy(dtype='float32'), dtype=torch.float32)
     return edge_index, edge_attr
 
