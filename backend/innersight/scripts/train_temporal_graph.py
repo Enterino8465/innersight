@@ -220,35 +220,21 @@ def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = N
                 len(unique_periods),
                 f' (excluding {len(exclude_users)} val users)' if exclude_users else '')
 
-    from concurrent.futures import ProcessPoolExecutor, as_completed
-    import os
-
-    # Each worker receives its own copy of the raw logs in memory.
-    # The HTTP log alone is ~15 GB, so 32 workers would need ~480 GB → OOM.
-    # 4 workers stay well within the 128 GB RAM limit (~60 GB peak).
-    num_workers = min(4, os.cpu_count() or 1)
-    logger.info('train_temporal_graph | using %d parallel workers for graph building.', num_workers)
-
+    # Sequential graph building — no parallelism.
+    # ProcessPoolExecutor caused BrokenProcessPool crashes because each worker
+    # forks a full copy of the 28M-row HTTP log into memory (OOM kill).
+    # With logs pre-sorted and flags precomputed above, each graph build is a
+    # fast binary-search slice (~1-2 s), so 3200 graphs takes ~1-2 h single-threaded.
     graphs = {}
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        future_to_period = {
-            executor.submit(
-                build_windowed_graph,
-                used_logs, ws, we,
-                max_url_nodes=max_url_nodes,
-                max_file_nodes=max_file_nodes
-            ): (ws, we)
-            for (ws, we) in unique_periods
-        }
-
-        count = 0
-        for future in as_completed(future_to_period):
-            period = future_to_period[future]
-            graphs[period] = future.result()
-            count += 1
-            if count % 100 == 0:
-                logger.info('train_temporal_graph | built %d/%d period graphs.',
-                            count, len(unique_periods))
+    total = len(unique_periods)
+    for count, (ws, we) in enumerate(unique_periods, 1):
+        graphs[(ws, we)] = build_windowed_graph(
+            used_logs, ws, we,
+            max_url_nodes=max_url_nodes,
+            max_file_nodes=max_file_nodes,
+        )
+        if count % 100 == 0:
+            logger.info('train_temporal_graph | built %d/%d period graphs.', count, total)
     return graphs
 
 
