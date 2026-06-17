@@ -824,11 +824,21 @@ def build_url_nodes(
 
     # ── 1. Normalise to domain level ──────────────────────────────────────────
     http_w = http_w.copy()
-    http_w['_domain'] = http_w['url'].apply(_extract_domain)
-    http_w['_day']    = http_w['date'].dt.normalize()
-    h = http_w['date'].dt.hour
-    http_w['_after_hours'] = (h < BUSINESS_HOURS_START) | (h >= BUSINESS_HOURS_END)
-    http_w['_weekend']     = http_w['date'].dt.dayofweek >= 5
+    # Use pre-computed columns from _presort_logs where available, falling back
+    # to on-the-fly computation only when the df wasn't pre-processed.
+    if '_domain' not in http_w.columns:
+        http_w['_domain'] = http_w['url'].apply(_extract_domain)
+    if '_day' not in http_w.columns:
+        http_w['_day'] = http_w['date'].dt.normalize()
+    # _presort_logs stores the after-hours flag as '_after'; rename for this function.
+    if '_after_hours' not in http_w.columns:
+        if '_after' in http_w.columns:
+            http_w['_after_hours'] = http_w['_after']
+        else:
+            h = http_w['date'].dt.hour
+            http_w['_after_hours'] = (h < BUSINESS_HOURS_START) | (h >= BUSINESS_HOURS_END)
+    if '_weekend' not in http_w.columns:
+        http_w['_weekend'] = http_w['date'].dt.dayofweek >= 5
 
     sorted_domains = sorted(http_w['_domain'].unique())
     url_to_idx     = {d: i for i, d in enumerate(sorted_domains)}
