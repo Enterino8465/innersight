@@ -604,10 +604,12 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_temporal_graph | detection: %d/%d insiders flagged, median latency=%s days.",
                 latency['detected_count'], latency['total_insiders'], latency['median_days'])
 
-    # Final model on all data → checkpoint. (_fit_fold returns the trained model;
-    # the previous version saved a freshly-initialised, untrained model by mistake.)
+    # Final model: train on ALL data with no held-out users so the training
+    # graphs are identical to full_graphs (already cached — no rebuild needed).
+    # Passing empty val_pos means val_users=set(), which bypasses _filter_logs
+    # entirely.  The returned val_probs are discarded; we only keep the model.
     all_pos = np.arange(len(y))
-    _, final = _fit_fold(all_pos, all_pos, seeds[0], registry=registry, logs=logs,
+    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry, logs=logs,
                          full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
                          train_cfg=train_cfg, metadata=metadata,
                          max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
