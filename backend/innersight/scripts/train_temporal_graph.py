@@ -171,7 +171,7 @@ def _presort_logs(logs: dict) -> dict:
             if not _pd.api.types.is_datetime64_any_dtype(df['date']):
                 df['date'] = _pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
-            df._date_sorted = True  # signal to _win_prepare that sort is done
+            df.attrs['_date_sorted'] = True  # signal to _filter_window to use searchsorted
 
             # Precompute datetime flags to avoid dt accessors in the loop
             h = df['date'].dt.hour
@@ -203,38 +203,85 @@ def _presort_logs(logs: dict) -> dict:
     return out
 
 
+def _graph_cache_subdir(cache_dir: str, exclude_users, max_url_nodes, max_file_nodes) -> 'Path | None':
+    """Return the per-configuration cache subdirectory, creating it if needed."""
+    import hashlib
+    from pathlib import Path as _Path
+    if not cache_dir:
+        return None
+    if exclude_users:
+        h = hashlib.md5(','.join(sorted(exclude_users)).encode()).hexdigest()[:10]
+        subdir = _Path(cache_dir) / f'excl_{h}'
+    else:
+        subdir = _Path(cache_dir) / 'full'
+    subdir.mkdir(parents=True, exist_ok=True)
+    return subdir
+
+
+def _graph_cache_file(subdir, ws, we, max_url_nodes, max_file_nodes) -> 'Path':
+    """Return the cache file path for a single period graph."""
+    ws_s = str(ws).replace(' ', 'T').replace(':', '').replace('-', '')[:15]
+    we_s = str(we).replace(' ', 'T').replace(':', '').replace('-', '')[:15]
+    return subdir / f'{ws_s}_{we_s}_u{max_url_nodes or 0}_f{max_file_nodes or 0}.pkl'
+
+
 def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
                          max_url_nodes: int | None = None,
-                         max_file_nodes: int | None = None) -> dict:
-    """Build one windowed HeteroData per unique period (optionally excluding users) in parallel.
+                         max_file_nodes: int | None = None,
+                         cache_dir: str | None = None) -> dict:
+    """Build one windowed HeteroData per unique period with disk caching.
 
-    ``max_url_nodes`` / ``max_file_nodes`` cap the URL/file node count per window
-    to bound peak memory (see :func:`build_windowed_graph`).
+    Each graph is saved to disk immediately after building.  On restart the
+    cached file is loaded instead of rebuilding — so killing the job never
+    wastes work.  ``cache_dir`` is the root cache directory; a subdirectory
+    is created per unique ``exclude_users`` configuration.
     """
+    import pickle
     used_logs = _filter_logs(logs, exclude_users) if exclude_users else logs
-    # Pre-sort once by date and precompute flags
     used_logs = _presort_logs(used_logs)
 
     unique_periods = sorted(list(set(periods)))
+    total = len(unique_periods)
     logger.info('train_temporal_graph | building %d period graphs%s …',
-                len(unique_periods),
+                total,
                 f' (excluding {len(exclude_users)} val users)' if exclude_users else '')
 
-    # Sequential graph building — no parallelism.
-    # ProcessPoolExecutor caused BrokenProcessPool crashes because each worker
-    # forks a full copy of the 28M-row HTTP log into memory (OOM kill).
-    # With logs pre-sorted and flags precomputed above, each graph build is a
-    # fast binary-search slice (~1-2 s), so 3200 graphs takes ~1-2 h single-threaded.
+    cache_subdir = _graph_cache_subdir(cache_dir, exclude_users, max_url_nodes, max_file_nodes)
+
     graphs = {}
-    total = len(unique_periods)
+    n_cached = 0
     for count, (ws, we) in enumerate(unique_periods, 1):
-        graphs[(ws, we)] = build_windowed_graph(
+        # ── Try disk cache first ──────────────────────────────────────────────
+        if cache_subdir is not None:
+            cfile = _graph_cache_file(cache_subdir, ws, we, max_url_nodes, max_file_nodes)
+            if cfile.exists():
+                with open(cfile, 'rb') as fh:
+                    graphs[(ws, we)] = pickle.load(fh)
+                n_cached += 1
+                if count % 100 == 0:
+                    logger.info('train_temporal_graph | loaded %d/%d graphs (cache hits: %d).',
+                                count, total, n_cached)
+                continue
+
+        # ── Build fresh ───────────────────────────────────────────────────────
+        graph = build_windowed_graph(
             used_logs, ws, we,
             max_url_nodes=max_url_nodes,
             max_file_nodes=max_file_nodes,
         )
+        if cache_subdir is not None:
+            cfile = _graph_cache_file(cache_subdir, ws, we, max_url_nodes, max_file_nodes)
+            with open(cfile, 'wb') as fh:
+                pickle.dump(graph, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+        graphs[(ws, we)] = graph
         if count % 100 == 0:
-            logger.info('train_temporal_graph | built %d/%d period graphs.', count, total)
+            logger.info('train_temporal_graph | built %d/%d period graphs (cached: %d).',
+                        count, total, n_cached)
+
+    if n_cached:
+        logger.info('train_temporal_graph | %d/%d graphs from cache, %d built fresh.',
+                    n_cached, total, total - n_cached)
     return graphs
 
 
@@ -296,7 +343,7 @@ def _inner_user_split(train_pos, user_ids, y, frac: float = 0.2, seed: int = 0):
 
 def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
               temporal_cfg, graph_cfg, train_cfg, metadata,
-              max_url_nodes=None, max_file_nodes=None):
+              max_url_nodes=None, max_file_nodes=None, cache_dir=None):
     """Train the chained model on one fold; return ``(val_probs, model)``.
 
     Leakage-safe model selection: early stopping uses an INNER user-level holdout
@@ -312,6 +359,7 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
     train_graphs = _build_period_graphs(
         logs, period_keys, exclude_users=val_users,
         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+        cache_dir=cache_dir,
     )
 
     inner_train_pos, inner_val_pos = _inner_user_split(train_pos, user_ids, y, frac=0.2, seed=seed)
@@ -442,6 +490,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--device', default='auto', choices=['auto', 'cpu', 'cuda', 'mps'],
                    help="Compute device for the model: 'auto' = cuda>mps>cpu (default). "
                         "Graph construction stays on CPU regardless.")
+    p.add_argument('--graph-cache-dir', default=None, metavar='PATH',
+                   help='Directory to cache built period graphs to disk. On restart, cached '
+                        'graphs are loaded instantly (checkpoint-style resume). '
+                        'Recommended: --graph-cache-dir /workspace/results_r4.2/graph_cache')
     return p.parse_args(argv)
 
 
@@ -490,8 +542,10 @@ def main(argv: list[str] | None = None) -> int:
                 max_url_nodes, max_file_nodes)
 
     # Full-log graphs (used for evaluation and to derive a consistent metadata).
+    graph_cache_dir = args.graph_cache_dir
     full_graphs = _build_period_graphs(logs, period_keys, exclude_users=None,
-                                       max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
+                                       max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+                                       cache_dir=graph_cache_dir)
     metadata = next(iter(full_graphs.values())).metadata()
 
     registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys, "y": y}
@@ -500,7 +554,8 @@ def main(argv: list[str] | None = None) -> int:
         val_probs, _ = _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
                                  full_graphs=full_graphs, temporal_cfg=temporal_cfg,
                                  graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata,
-                                 max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
+                                 max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+                                 cache_dir=graph_cache_dir)
         return val_probs
 
     # Index registry trick: X carries original positions so the harness's slicing
@@ -532,7 +587,8 @@ def main(argv: list[str] | None = None) -> int:
     _, final = _fit_fold(all_pos, all_pos, seeds[0], registry=registry, logs=logs,
                          full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
                          train_cfg=train_cfg, metadata=metadata,
-                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes)
+                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
+                         cache_dir=graph_cache_dir)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"temporal_graph_{args.version}.pt"
