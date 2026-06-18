@@ -43,6 +43,7 @@ from innersight.scripts.train_temporal_graph import (
     _build_period_graphs,
     _build_window_registry,
     _group_positions_by_period,
+    _mask_graphs_for_training,
 )
 from innersight.training.evaluation import (
     compute_metrics,
@@ -167,20 +168,26 @@ def _build_model(metadata, num_roles, num_depts, temporal_cfg, graph_cfg, head_d
     ).to(_DEVICE)
 
 
-def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
-              temporal_cfg, graph_cfg, head_dropout, train_cfg, metadata, num_roles, num_depts,
-              max_url_nodes=None, max_file_nodes=None, cache_dir=None):
-    """Train the fusion model on one fold; return val probabilities (val_pos order)."""
+def _fit_fold(train_pos, val_pos, seed, *, registry, full_graphs,
+              temporal_cfg, graph_cfg, head_dropout, train_cfg, metadata, num_roles, num_depts):
+    """Train the fusion model on one fold; return val probabilities (val_pos order).
+
+    Uses in-memory user masking (same technique as train_temporal_graph) instead
+    of rebuilding graphs from raw logs for each CV fold.  Excluded val users are
+    hidden from ``user_to_idx`` so the GNN cannot inject their temporal embeddings
+    during training, preserving the inductive split guarantee at O(n_periods×n_users)
+    cost rather than O(15× full graph rebuild).
+    """
     seed_everything(seed)
     windows_t, user_ids, period_keys, y = (
         registry["windows"], registry["user_ids"], registry["periods"], registry["y"])
 
     val_users = set(user_ids[val_pos].tolist())
-    train_graphs = _build_period_graphs(
-        logs, period_keys, exclude_users=val_users,
-        max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-        cache_dir=cache_dir,
-    )
+    # O(n_periods × n_users) in-memory mask — no raw-log rebuild needed.
+    train_graphs = _mask_graphs_for_training(full_graphs, val_users)
+    if val_users:
+        logger.info("train_fusion | fold: masking %d val users from %d graphs (in-memory).",
+                    len(val_users), len(train_graphs))
 
     model = _build_model(metadata, num_roles, num_depts, temporal_cfg, graph_cfg, head_dropout)
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["lr"],
@@ -343,6 +350,12 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_fusion | %d windows, %d positive | %d roles, %d depts, OCEAN for %d users.",
                 len(y), n_pos, num_roles, num_depts, len(ocean_map))
 
+    max_url_nodes = args.max_url_nodes if args.max_url_nodes and args.max_url_nodes > 0 else None
+    max_file_nodes = args.max_file_nodes if args.max_file_nodes and args.max_file_nodes > 0 else None
+    graph_cache_dir = args.graph_cache_dir
+    logger.info("train_fusion | node caps: max_url_nodes=%s max_file_nodes=%s",
+                max_url_nodes, max_file_nodes)
+
     full_graphs = _build_period_graphs(
         logs, period_keys, exclude_users=None,
         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
@@ -353,13 +366,11 @@ def main(argv: list[str] | None = None) -> int:
                 "ocean": ocean, "roles": roles, "depts": depts}
 
     def fit(train_pos, val_pos, seed):
-        val_probs, _model = _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
+        val_probs, _model = _fit_fold(train_pos, val_pos, seed, registry=registry,
                                       full_graphs=full_graphs, temporal_cfg=temporal_cfg,
                                       graph_cfg=graph_cfg, head_dropout=head_dropout,
                                       train_cfg=train_cfg, metadata=metadata,
-                                      num_roles=num_roles, num_depts=num_depts,
-                                      max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-                                      cache_dir=graph_cache_dir)
+                                      num_roles=num_roles, num_depts=num_depts)
         return val_probs
 
     positions = np.arange(len(y)).reshape(-1, 1)
@@ -382,13 +393,13 @@ def main(argv: list[str] | None = None) -> int:
     latency = detection_latency(oof, metas, threshold, attack_windows)
 
     # Final model trained on all data → checkpoint.
+    # Final model: empty val_pos → val_users=set() → _mask_graphs_for_training returns
+    # full_graphs unchanged (no mask needed, uses the already-cached full graph).
     all_pos = np.arange(len(y))
-    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry, logs=logs,
+    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry,
                          full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
                          head_dropout=head_dropout, train_cfg=train_cfg, metadata=metadata,
-                         num_roles=num_roles, num_depts=num_depts,
-                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-                         cache_dir=graph_cache_dir)
+                         num_roles=num_roles, num_depts=num_depts)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"fusion_{args.version}.pt"

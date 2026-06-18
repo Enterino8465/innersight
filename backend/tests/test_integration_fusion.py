@@ -1,7 +1,10 @@
 """End-to-end integration tests for the fusion model pipeline (Phase 6)."""
 
-import resource
 import sys
+try:
+    import resource
+except ImportError:
+    resource = None
 
 import pandas as pd
 import pytest
@@ -149,11 +152,15 @@ def test_full_progressive_ladder_shapes(fusion_data):
 
 def _peak_rss_mb() -> float:
     """Peak process RSS in MB (ru_maxrss is bytes on macOS, KiB on Linux)."""
+    if resource is None:
+        return 0.0
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / (1024 * 1024) if sys.platform == "darwin" else peak / 1024
 
 
 def test_cpu_memory_reasonable(fusion_data):
+    if resource is None:
+        pytest.skip("resource module not available on Windows")
     graph, inputs = fusion_data
     # torch is already warm (fixture built a model), so the delta in peak RSS is
     # the fusion model's own footprint — must stay well under 500 MB on CPU.
