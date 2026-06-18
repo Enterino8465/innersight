@@ -245,6 +245,33 @@ def _graph_cache_file(subdir, ws, we, max_url_nodes, max_file_nodes) -> 'Path':
     return subdir / f'{ws_s}_{we_s}_u{max_url_nodes or 0}_f{max_file_nodes or 0}.pkl.gz'
 
 
+def _mask_graphs_for_training(full_graphs: dict, val_users: set) -> dict:
+    """Return a dict of period graphs with val users hidden from ``user_to_idx``.
+
+    Instead of rebuilding 3 200 graphs from raw logs for every CV fold, we
+    reuse the already-cached ``full_graphs`` and shadow val users from the
+    index mapping.  ``_chained_logits`` only injects temporal embeddings for
+    users that appear in ``graph.user_to_idx``, so excluded users' node
+    feature rows stay zero — the GNN cannot pass their information into the
+    training loss, preserving the inductive split guarantee.
+
+    The underlying node / edge *tensors* are shared (``copy.copy`` is a
+    shallow copy), so this is O(n_periods × n_users) in time and O(n_periods)
+    extra objects in memory — orders of magnitude cheaper than a raw-log
+    rebuild.
+    """
+    import copy
+    if not val_users:
+        return full_graphs
+    masked = {}
+    for period, g in full_graphs.items():
+        mg = copy.copy(g)          # shallow — tensors not duplicated
+        mg.user_to_idx = {u: idx for u, idx in getattr(g, 'user_to_idx', {}).items()
+                          if u not in val_users}
+        masked[period] = mg
+    return masked
+
+
 def _build_period_graphs(logs: dict, periods, exclude_users: set[str] | None = None,
                          max_url_nodes: int | None = None,
                          max_file_nodes: int | None = None,
@@ -361,26 +388,33 @@ def _inner_user_split(train_pos, user_ids, y, frac: float = 0.2, seed: int = 0):
     return train_pos[~in_val], train_pos[in_val]
 
 
-def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
-              temporal_cfg, graph_cfg, train_cfg, metadata,
-              max_url_nodes=None, max_file_nodes=None, cache_dir=None):
+def _fit_fold(train_pos, val_pos, seed, *, registry, full_graphs,
+              temporal_cfg, graph_cfg, train_cfg, metadata):
     """Train the chained model on one fold; return ``(val_probs, model)``.
 
-    Leakage-safe model selection: early stopping uses an INNER user-level holdout
-    carved from the training fold and scored on the (val-user-excluded) training
-    graphs. The outer ``val_pos`` fold is scored exactly once, at the end, on the
-    full-log graphs, and never influences which epoch is chosen.
+    Inductive leakage prevention: instead of rebuilding 3 200 graphs from raw
+    logs with val users filtered out (which would cost another 5 days per CV
+    pass), we reuse the cached ``full_graphs`` and call
+    :func:`_mask_graphs_for_training` to hide val users from ``user_to_idx``.
+    ``_chained_logits`` only injects temporal embeddings for users present in
+    that mapping, so excluded users contribute zero features to the GNN —
+    equivalent to removing them from the training graph at negligible cost.
+
+    Leakage-safe model selection: early stopping uses an INNER user-level
+    holdout carved from the training fold and scored on the masked training
+    graphs.  The outer ``val_pos`` fold is scored exactly once at the end on
+    the full-log graphs and never influences which epoch is chosen.
     """
     seed_everything(seed)
     windows_t, user_ids, period_keys, y = (
         registry["windows"], registry["user_ids"], registry["periods"], registry["y"])
 
     val_users = set(user_ids[val_pos].tolist())
-    train_graphs = _build_period_graphs(
-        logs, period_keys, exclude_users=val_users,
-        max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-        cache_dir=cache_dir,
-    )
+    # O(n_periods × n_users) in-memory mask — no raw-log rebuild needed.
+    train_graphs = _mask_graphs_for_training(full_graphs, val_users)
+    if val_users:
+        logger.info("train_temporal_graph | fold: masking %d val users from %d graphs (in-memory).",
+                    len(val_users), len(train_graphs))
 
     inner_train_pos, inner_val_pos = _inner_user_split(train_pos, user_ids, y, frac=0.2, seed=seed)
     early_stop = inner_val_pos.size > 0 and float(y[inner_val_pos].sum()) > 0
@@ -423,7 +457,7 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
         if not early_stop:
             continue  # no inner monitor → train the full epoch budget, keep final weights
 
-        # Monitor the inner holdout on the training graphs — never the outer fold.
+        # Monitor the inner holdout on the masked training graphs — never the outer fold.
         iv_probs = _predict(model, inner_val_pos, registry, train_graphs)
         metric = compute_metrics(iv_probs, y[inner_val_pos])["auprc"]
         if metric > best_metric:
@@ -438,8 +472,8 @@ def _fit_fold(train_pos, val_pos, seed, *, registry, logs, full_graphs,
     if early_stop:
         model.load_state_dict(best_state)  # else keep final-epoch weights
 
-    # Free this fold's training graphs before scoring (keeps peak RAM bounded
-    # across the 15 fold×seed fits — the per-fold graphs are no longer needed).
+    # train_graphs holds shallow copies sharing tensors with full_graphs — del
+    # the dict so the copy.copy wrappers can be GC'd (tensors stay alive).
     del train_graphs
     gc.collect()
 
@@ -575,11 +609,9 @@ def main(argv: list[str] | None = None) -> int:
     registry = {"windows": windows_t, "user_ids": user_ids, "periods": period_keys, "y": y}
 
     def fit(train_pos, val_pos, seed):
-        val_probs, _ = _fit_fold(train_pos, val_pos, seed, registry=registry, logs=logs,
+        val_probs, _ = _fit_fold(train_pos, val_pos, seed, registry=registry,
                                  full_graphs=full_graphs, temporal_cfg=temporal_cfg,
-                                 graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata,
-                                 max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-                                 cache_dir=graph_cache_dir)
+                                 graph_cfg=graph_cfg, train_cfg=train_cfg, metadata=metadata)
         return val_probs
 
     # Index registry trick: X carries original positions so the harness's slicing
@@ -605,16 +637,13 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("train_temporal_graph | detection: %d/%d insiders flagged, median latency=%s days.",
                 latency['detected_count'], latency['total_insiders'], latency['median_days'])
 
-    # Final model: train on ALL data with no held-out users so the training
-    # graphs are identical to full_graphs (already cached — no rebuild needed).
-    # Passing empty val_pos means val_users=set(), which bypasses _filter_logs
-    # entirely.  The returned val_probs are discarded; we only keep the model.
+    # Final model: train on ALL data — empty val_pos means val_users=set(), so
+    # _mask_graphs_for_training returns full_graphs unchanged (no mask needed).
+    # The returned val_probs are discarded; we only keep the model.
     all_pos = np.arange(len(y))
-    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry, logs=logs,
+    _, final = _fit_fold(all_pos, np.array([], dtype=int), seeds[0], registry=registry,
                          full_graphs=full_graphs, temporal_cfg=temporal_cfg, graph_cfg=graph_cfg,
-                         train_cfg=train_cfg, metadata=metadata,
-                         max_url_nodes=max_url_nodes, max_file_nodes=max_file_nodes,
-                         cache_dir=graph_cache_dir)
+                         train_cfg=train_cfg, metadata=metadata)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"temporal_graph_{args.version}.pt"
