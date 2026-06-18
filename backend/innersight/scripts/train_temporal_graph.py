@@ -97,7 +97,6 @@ def _chained_logits(model: ChainedTemporalGraph, windows: torch.Tensor,
         ``(n_samples, 1)`` logits in the order of ``windows``.
     """
     windows = windows.to(_DEVICE)
-    graph = graph.to(_DEVICE)  # HeteroData → move node/edge tensors to the model's device
     temporal_emb = model.temporal(windows)                       # shape: (n_samples, 128)
     user_map = getattr(graph, "user_to_idx", {})
     n_user_nodes = graph["user"].x.shape[0]
@@ -114,9 +113,11 @@ def _chained_logits(model: ChainedTemporalGraph, windows: torch.Tensor,
                          dtype=temporal_emb.dtype, device=temporal_emb.device)
     user_x = user_x.index_copy(0, rows, temporal_emb[in_graph])  # shape: (n_user_nodes, 128)
 
-    x_dict = dict(graph.x_dict)
+    x_dict = {k: v.to(_DEVICE) for k, v in graph.x_dict.items()}
     x_dict["user"] = user_x
-    enriched = model.graph(x_dict, graph.edge_index_dict, graph.edge_attr_dict)["user"]  # (N, 128)
+    edge_index_dict = {k: v.to(_DEVICE) for k, v in graph.edge_index_dict.items()}
+    edge_attr_dict = {k: v.to(_DEVICE) for k, v in graph.edge_attr_dict.items()}
+    enriched = model.graph(x_dict, edge_index_dict, edge_attr_dict)["user"]  # (N, 128)
 
     # Per-sample embedding: enriched for in-graph users, temporal-only otherwise.
     emb = temporal_emb.clone()

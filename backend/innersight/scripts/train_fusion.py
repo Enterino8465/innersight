@@ -111,7 +111,6 @@ def _fusion_logits(model, windows, sample_user_ids, graph, ocean, roles, depts) 
     from the graph get a temporal-only (zero graph part) embedding.
     """
     windows = windows.to(_DEVICE)
-    graph = graph.to(_DEVICE)  # HeteroData → model's device
     temporal_emb = model.temporal(windows)                       # shape: (n, 128)
     user_map = getattr(graph, "user_to_idx", {})
     n_user_nodes = graph["user"].x.shape[0]
@@ -124,8 +123,13 @@ def _fusion_logits(model, windows, sample_user_ids, graph, ocean, roles, depts) 
         user_x = torch.zeros(n_user_nodes, temporal_emb.shape[1],
                              dtype=temporal_emb.dtype, device=temporal_emb.device)
         user_x = user_x.index_copy(0, rows, temporal_emb[in_graph])
-        enriched = model.graph({**graph.x_dict, "user": user_x},
-                               graph.edge_index_dict, graph.edge_attr_dict)["user"]
+        
+        x_dict = {k: v.to(_DEVICE) for k, v in graph.x_dict.items()}
+        x_dict["user"] = user_x
+        edge_index_dict = {k: v.to(_DEVICE) for k, v in graph.edge_index_dict.items()}
+        edge_attr_dict = {k: v.to(_DEVICE) for k, v in graph.edge_attr_dict.items()}
+
+        enriched = model.graph(x_dict, edge_index_dict, edge_attr_dict)["user"]
         graph_emb = graph_emb.index_copy(
             0, torch.tensor(in_graph, dtype=torch.long, device=_DEVICE), enriched[rows])
 
