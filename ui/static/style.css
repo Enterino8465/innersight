@@ -1,0 +1,201 @@
+/* Plain on purpose. This is a defence demo, not a product. */
+
+:root {
+  --ink: #1c1c1c;
+  --muted: #6a6a6a;
+  --line: #d8d5cf;
+  --paper: #fbfaf7;
+  --panel: #ffffff;
+  --ok: #1f6b3a;
+  --fail: #9c2020;
+  --refuse: #8a5a00;
+  --accent: #24406b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  max-width: 62rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; margin: 1.6rem 0 0.6rem; }
+h3 { font-size: 0.95rem; margin: 1.2rem 0 0.4rem; }
+.sub, .lead { color: var(--muted); }
+.lead { margin-top: 0; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+
+header { border-bottom: 1px solid var(--line); padding-bottom: 1rem; }
+
+.tabs { display: flex; gap: 0.5rem; margin: 1.2rem 0; }
+.tab {
+  background: none; border: 1px solid var(--line); border-radius: 3px;
+  padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.9rem; color: var(--muted);
+}
+.tab.active { color: var(--ink); border-color: var(--ink); background: var(--panel); }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 4px; padding: 1.2rem;
+}
+.hidden { display: none; }
+
+.row { display: flex; align-items: center; gap: 0.6rem; margin: 0.7rem 0; flex-wrap: wrap; }
+.row label { color: var(--muted); font-size: 0.85rem; min-width: 6.5rem; }
+.row label.check { min-width: 0; display: flex; align-items: center; gap: 0.35rem; }
+input[type=text], select {
+  font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--line);
+  border-radius: 3px; background: #fff; color: var(--ink);
+}
+#run-folder, #train-folder { min-width: 16rem; }
+#run-path, #train-path { font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; margin: -0.2rem 0 0.6rem 7.1rem; }
+
+button.primary, button.secondary {
+  font: inherit; padding: 0.45rem 1.1rem; border-radius: 3px; cursor: pointer;
+}
+button.primary { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+button[disabled] { opacity: 0.5; cursor: default; }
+
+.detection {
+  margin-top: 0.8rem; font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8rem; white-space: pre-wrap; color: var(--muted);
+}
+.detection.ok { color: var(--ok); }
+.detection.bad { color: var(--refuse); }
+
+pre#log {
+  background: #16181c; color: #d8dee9; padding: 0.9rem 1rem; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem;
+  line-height: 1.45; max-height: 26rem; overflow: auto; white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.badge {
+  display: inline-block; padding: 0.1rem 0.55rem; border-radius: 10px;
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.badge.running   { background: #e8eef7; color: var(--accent); }
+.badge.succeeded { background: #e6f2ea; color: var(--ok); }
+.badge.failed    { background: #f7e8e8; color: var(--fail); }
+.badge.refused   { background: #f8f0dd; color: var(--refuse); }
+
+/* ---- structure -------------------------------------------------------
+   A `block` is a top-level section, cut off from the one above it by a hard
+   rule and a lot of space. A `card` is one repeated thing inside a block —
+   one model, one stored run. The point is that a reader can see where one
+   thing ends and the next begins without reading any of it. */
+
+.block { margin: 2.6rem 0 0; padding-top: 1.5rem; border-top: 3px solid var(--ink); }
+.block:first-child { margin-top: 0.5rem; padding-top: 0; border-top: none; }
+.block > h3 {
+  margin: 0 0 0.9rem; font-size: 1.05rem; letter-spacing: -0.01em;
+  display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap;
+}
+.block > h3 .eyebrow {
+  font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  font-weight: 400;
+}
+
+.card {
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 4px; padding: 0.9rem 1.1rem; margin: 0.9rem 0;
+  background: #fcfbf9;
+}
+/* No text-transform here: a card title can be a run id like
+   20260821-r42-162305, and uppercasing it prints an identifier that does not
+   exist on disk. */
+.card > h4 {
+  margin: 0 0 0.6rem; font-size: 0.82rem; font-weight: 600;
+  letter-spacing: 0.02em; color: var(--muted);
+}
+.card > :last-child { margin-bottom: 0; }
+.card p { margin: 0.4rem 0; }
+
+.scroll { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin: 0.4rem 0 1rem; }
+th, td { text-align: right; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th {
+  color: var(--muted); font-weight: 600; font-size: 0.78rem;
+  border-bottom: 2px solid var(--line); white-space: nowrap;
+}
+tr:last-child td { border-bottom: none; }
+td.num { font-family: ui-monospace, Menlo, monospace; }
+
+.guard {
+  font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+  margin: 0; padding: 0.3rem 0; border-bottom: 1px dotted var(--line);
+}
+.guard:last-child { border-bottom: none; }
+.guard .verdict { display: inline-block; width: 3.2rem; font-weight: 700; }
+.guard.pass .verdict { color: var(--ok); }
+.guard.fail .verdict { color: var(--fail); }
+.guard .detail { color: var(--muted); }
+
+.warn {
+  border-left: 3px solid var(--refuse); background: #fdf8ec;
+  padding: 0.7rem 0.9rem; margin: 1rem 0; font-size: 0.88rem;
+}
+.warn.good { border-left-color: var(--ok); background: #eef6f0; }
+.note { color: var(--muted); font-size: 0.82rem; margin: 0.3rem 0 1rem; }
+
+footer {
+  margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 0.82rem;
+}
+
+/* ---- one training session ---------------------------------------------
+   The Results tab repeats one of these per run. It is deliberately heavier
+   than `.card`: on that tab the thing a reader has to separate is a training
+   session, so the session gets the strongest boundary on the page and the
+   tables inside it get none. Before this, the hard rules cut between metric
+   types and the runs were cards inside them, which made it impossible to see
+   which numbers belonged to which run. */
+
+section.session {
+  margin-top: 2.2rem; padding: 0 1.2rem 1rem; background: #fcfbf9;
+  border: 1px solid var(--line); border-top: 5px solid var(--ink);
+  border-radius: 4px;
+}
+.session-bar {
+  margin: 0 -1.2rem 1rem; padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid var(--line); background: #f4f2ed;
+}
+.session-n {
+  font-family: ui-monospace, Menlo, monospace; font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted);
+}
+.session-bar h3 {
+  margin: 0.25rem 0 0.15rem; font-size: 1.15rem; letter-spacing: -0.01em;
+  font-family: ui-monospace, Menlo, monospace;
+}
+.session-sub { margin: 0; color: var(--muted); font-size: 0.85rem; }
+h4.session-h {
+  margin: 1.4rem 0 0.3rem; font-size: 0.8rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+}
+
+/* The session facts are labels and values, not a column of quantities. */
+table.kv { width: auto; min-width: 26rem; }
+table.kv th[scope=row] {
+  text-align: left; font-weight: 400; color: var(--muted); width: 12rem;
+  border-bottom: 1px solid var(--line);
+}
+table.kv td {
+  text-align: left; font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.empty { padding: 2.5rem 0; text-align: center; color: var(--muted); }
+.empty h3 { margin: 0 0 0.4rem; font-size: 1.05rem; color: var(--ink); }
+
+#models-body a { color: var(--accent); }

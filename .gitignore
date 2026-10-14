@@ -1,0 +1,47 @@
+# environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# generated data
+data/*
+!data/.gitkeep
+
+# generated outputs
+outputs/checkpoints/*
+outputs/figures/*
+!**/.gitkeep
+
+# Brief R1: everything a non-default INNERSIGHT_RELEASE generates.
+# r4.2's release root is PROJECT_ROOT itself, so its data/ and outputs/ are
+# covered by the two rules above and nothing moved. Every other release gets
+# releases/<id>/{data,outputs}/ instead, and none of it is a result yet --
+# extraction is not aligned to r5.2 until brief R2 lands.
+releases/
+
+# Stage 8: models the UI trained, and the tables an inference run derived.
+# Both are reproducible from a folder plus a command; neither is a result.
+models/
+runs/
+
+# scratch: files moved aside for deletion (tooling cannot rm)
+_to_delete/
+
+# tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# rehearsal artifacts from --sample runs: never results, never committed
+*.sample.json
+*.sample.log
+*.sample.png
+
+# AI rebuild scaffolding - local only, not published
+Claude outputs/
+REWRITE_PHASE*.md
+
+# teaching pages and UI mockups - local only
+html_files/
+code learning/

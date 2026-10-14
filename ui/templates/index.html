@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InnerSight — local run</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+  <h1>InnerSight</h1>
+  <p class="sub">Insider threat detection on the CERT dataset — local run console.
+     Serving from <code>{{ project_root }}</code>.</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-panel="run">Run a stored model on a folder</button>
+  <button class="tab" data-panel="train">Train a new model on a folder</button>
+  <button class="tab" data-panel="models">Results</button>
+</nav>
+
+<section id="run" class="panel">
+  <p class="lead">
+    Reads the five raw logs in the chosen release, rebuilds the daily counts,
+    the labels, the per-user z-scores and the splits, then scores the test
+    split with the frozen checkpoints. The threshold, the standardiser and the
+    weights all come off the checkpoint — nothing is chosen here — and the run
+    asserts that it reproduces the AUPRC already published in
+    <code>outputs/final_results.json</code>.
+    <br><em>The menu below names a place to look. What the folder actually is
+    gets decided by its own five header lines.</em>
+  </p>
+
+  <div class="row">
+    <label for="run-folder">Dataset</label>
+    <select id="run-folder">
+      {% for folder in folders %}
+      <option value="{{ folder.release }}" data-path="{{ folder.path }}">
+        {{ folder.label }}{% if not folder.available %} — not mounted{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <button id="run-detect" class="secondary">Identify</button>
+  </div>
+  <p class="note" id="run-path"></p>
+
+  <div class="row">
+    <label for="run-device">Device</label>
+    <select id="run-device">
+      {% for device in devices %}
+      <option value="{{ device }}" {% if device == default_device %}selected{% endif %}>{{ device }}</option>
+      {% endfor %}
+    </select>
+    <label class="check">
+      <input id="run-sample" type="checkbox">
+      sample mode — 30 users, seconds, meaningless numbers
+    </label>
+  </div>
+
+  <div class="row">
+    <label for="run-stored">Stored model</label>
+    <select id="run-stored"><option value="">the frozen headline checkpoints</option></select>
+  </div>
+
+  <div class="row">
+    <label class="check">
+      <input id="run-transfer" type="checkbox">
+      allow a cross-release transfer — score this folder with a model trained
+      on the <em>other</em> release
+    </label>
+  </div>
+  <p class="note">
+    Off, a model whose release is not this folder's release is refused before
+    anything is derived. On, the run happens and every line of it is labelled a
+    transfer measurement, names the features that are structurally degenerate
+    on each release, and reproduces no published number. The standardiser guard
+    does not relax for it — it inverts, and passes only by proving the
+    checkpoint's transform is foreign to these rows. On a matched run this box
+    does nothing.
+  </p>
+
+  <div class="row">
+    <button id="run-go" class="primary">Run</button>
+  </div>
+
+  <div id="run-detection" class="detection"></div>
+</section>
+
+<section id="train" class="panel hidden">
+  <p class="lead">
+    Runs the whole pipeline over the chosen folder and keeps the result in
+    <code>models/&lt;run_id&gt;/</code>, where the first button can load it
+    again. Training happens inside a per-run sandbox whose project root is that
+    directory, so the frozen checkpoints in <code>outputs/checkpoints/</code>
+    are not reachable from it. This takes a long time; run it before the
+    defence, not during.
+  </p>
+
+  <div class="row">
+    <label for="train-folder">Dataset</label>
+    <select id="train-folder">
+      {% for folder in folders %}
+      <option value="{{ folder.release }}" data-path="{{ folder.path }}">
+        {{ folder.label }}{% if not folder.available %} — not mounted{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <button id="train-detect" class="secondary">Identify</button>
+  </div>
+  <p class="note" id="train-path"></p>
+
+  <div class="row">
+    <label for="train-device">Device</label>
+    <select id="train-device">
+      {% for device in devices %}
+      <option value="{{ device }}" {% if device == default_device %}selected{% endif %}>{{ device }}</option>
+      {% endfor %}
+    </select>
+    <label for="train-seeds">Seeds</label>
+    <input id="train-seeds" type="text" value="{{ seeds }}" size="14">
+    <label for="train-epochs">Max epochs</label>
+    <input id="train-epochs" type="text" placeholder="config default" size="10">
+  </div>
+
+  <div class="row">
+    <button id="train-go" class="primary">Train</button>
+  </div>
+
+  <div id="train-detection" class="detection"></div>
+</section>
+
+<section id="models" class="panel hidden">
+  <p class="lead">
+    One entry per training session started on the tab to the left, newest
+    first, with everything that session measured. Nothing here runs: each
+    number was written by the run that produced it and is read back out of
+    <code>models/&lt;run_id&gt;/manifest.json</code>. It is instant, and there
+    is no scoring path in it to go wrong.
+    <br><em>This tab shows only what was trained here. It is empty until you
+    train something.</em>
+  </p>
+  <div class="row">
+    <button id="models-refresh" class="secondary">Refresh</button>
+  </div>
+  <div id="models-body"></div>
+</section>
+
+<section id="status" class="hidden">
+  <h2>
+    <span id="state-badge" class="badge running">running</span>
+    <span id="state-text"></span>
+  </h2>
+  <pre id="log"></pre>
+</section>
+
+<section id="results" class="hidden"></section>
+
+<footer>
+  <p>
+    This page cannot open a test split. It has no import path to
+    <code>evaluation.run_phase2</code>, that command is absent from the
+    subprocess allowlist, and every write it makes is refused unless it lands
+    in <code>models/</code> or <code>runs/</code>. Scoring the test split here
+    is a reproduction of a published number, not a second pass: nothing is
+    selected, and the run fails if the answer differs.
+  </p>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
